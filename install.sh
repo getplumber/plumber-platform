@@ -182,7 +182,7 @@ echo -e "${BOLD}║         Plumber Installer            ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
 echo ""
 
-if [ ! -f compose.yml ] || [ ! -f versions.env ]; then
+if [ ! -f compose.yml ] || [ ! -f scripts/preflight.sh ]; then
     echo "Plumber repository not detected. Cloning..."
     echo ""
 
@@ -454,16 +454,17 @@ echo -e "${GREEN}✓${NC} Secrets generated"
 echo -e "${DIM}  PLUMBER_TOKEN_ENCRYPTION_KEY seals every stored GitLab secret. Back up .env: the key cannot be rotated.${NC}"
 
 # =============================================================================
-# Step 6: Read image tags from versions.env
+# Step 6: Read the pinned image version (compose.yml)
 # =============================================================================
 
-# shellcheck disable=SC1091
-source versions.env
-if [ -z "${PLATFORM_VERSION:-}" ]; then
-    echo -e "${RED}Error:${NC} versions.env is missing PLATFORM_VERSION."
+# Both app images are pinned to one release tag in the compose files; a release
+# moves them together and `scripts/update.sh` only has to pull the repository.
+PINNED_VERSION=$(sed -n 's|^ *image: docker.io/getplumber/platform-backend:\(v[0-9][0-9.]*\)$|\1|p' compose.yml | head -n 1)
+if [ -z "${PINNED_VERSION}" ]; then
+    echo -e "${RED}Error:${NC} compose.yml does not pin the platform-backend image to a release tag."
     exit 1
 fi
-echo -e "${GREEN}✓${NC} Platform version: ${PLATFORM_VERSION}"
+echo -e "${GREEN}✓${NC} Platform version: ${PINNED_VERSION}"
 
 # =============================================================================
 # Step 7: Write .env
@@ -478,9 +479,6 @@ write_common_env() {
     env_line PLUMBER_TOKEN_ENCRYPTION_KEY "$PLUMBER_TOKEN_ENCRYPTION_KEY"
     env_line PLUMBER_DB_PASSWORD "$PLUMBER_DB_PASSWORD"
     env_line PLUMBER_REDIS_PASSWORD "$PLUMBER_REDIS_PASSWORD"
-    echo ""
-    echo "# Image version (managed by versions.env, synced by scripts/update.sh)"
-    env_line PLATFORM_VERSION "$PLATFORM_VERSION"
 }
 
 if [ "$DEPLOY_TYPE" = "2" ]; then

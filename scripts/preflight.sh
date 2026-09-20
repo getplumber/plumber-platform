@@ -162,13 +162,6 @@ run_post_checks() {
         fi
     fi
 
-    # Check the image pin is present
-    if [ -z "${PLATFORM_VERSION:-}" ]; then
-        fail "PLATFORM_VERSION is not set (run ./install.sh or ./scripts/update.sh)"
-    else
-        pass "PLATFORM_VERSION=${PLATFORM_VERSION}"
-    fi
-
     # Custom CA bundle consistency (any deployment type, any TLS method)
     CA_DIR=".docker/ca-certificates"
     CA_COUNT=$(find "$CA_DIR" -maxdepth 1 -type f \( -name "*.pem" -o -name "*.crt" \) ! -name "plumber-ca.bundle" 2>/dev/null | wc -l | tr -d ' ')

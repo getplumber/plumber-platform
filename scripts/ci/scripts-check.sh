@@ -13,10 +13,10 @@ echo "  ok   syntax + shellcheck"
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
-cp -r compose.yml compose.local.yml .env.example versions.env scripts .docker "$WORK/"
+cp -r compose.yml compose.local.yml .env.example scripts .docker "$WORK/"
 cd "$WORK"
 KEY=$(printf 'a%.0s' $(seq 64))
-cat .env.example versions.env > .env
+cp .env.example .env
 sed -i \
   -e 's|^DOMAIN_NAME=.*|DOMAIN_NAME="plumber.example.com"|' \
   -e 's|^GITLAB_URL=.*|GITLAB_URL="https://gitlab.example.com"|' \
@@ -50,8 +50,5 @@ PLUMBER_PREFLIGHT_OFFLINE=1 bash scripts/preflight.sh --post >/dev/null || { ech
 # a 32-hex key must fail
 sed -i "s|^PLUMBER_TOKEN_ENCRYPTION_KEY=.*|PLUMBER_TOKEN_ENCRYPTION_KEY=\"$(printf 'a%.0s' $(seq 32))\"|" .env
 if PLUMBER_PREFLIGHT_OFFLINE=1 bash scripts/preflight.sh --post >/dev/null; then echo "FAIL: preflight accepted a 32-char key"; exit 1; fi
-# a missing PLATFORM_VERSION must fail
-sed -i "s|^PLUMBER_TOKEN_ENCRYPTION_KEY=.*|PLUMBER_TOKEN_ENCRYPTION_KEY=\"$KEY\"|; /^PLATFORM_VERSION=/d" .env
-if PLUMBER_PREFLIGHT_OFFLINE=1 bash scripts/preflight.sh --post >/dev/null; then echo "FAIL: preflight accepted a missing PLATFORM_VERSION"; exit 1; fi
 echo "  ok   preflight.sh --post"
 echo "scripts-check: all good"
