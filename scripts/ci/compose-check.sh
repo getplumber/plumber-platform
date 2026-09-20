@@ -10,7 +10,7 @@ cd "$(dirname "$0")/../.."
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 ENV="$TMP/.env"
-cat .env.example versions.env > "$ENV"
+cp .env.example "$ENV"
 KEY=$(printf '0%.0s' $(seq 64))
 sed -i \
   -e 's|^DOMAIN_NAME=.*|DOMAIN_NAME="plumber.example.com"|' \
@@ -18,7 +18,9 @@ sed -i \
   -e "s|^PLUMBER_TOKEN_ENCRYPTION_KEY=.*|PLUMBER_TOKEN_ENCRYPTION_KEY=\"$KEY\"|" \
   -e 's|^PLUMBER_DB_PASSWORD=.*|PLUMBER_DB_PASSWORD="dbpass"|' \
   -e 's|^PLUMBER_REDIS_PASSWORD=.*|PLUMBER_REDIS_PASSWORD="redispass"|' "$ENV"
-VERSION=$(sed -n 's/^PLATFORM_VERSION=//p' versions.env)
+# The release tag every consumer sees (latest.json) must be the one both compose files pin.
+VERSION=$(jq -r '.latest' latest.json)
+[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FAIL latest.json .latest is '$VERSION'"; exit 1; }
 
 FAILED=0
 check() { # check <label> <jq boolean filter> <json>
@@ -31,8 +33,8 @@ render() { # render <file> <profiles>
 for profiles in "letsencrypt,internal-db" "custom-certs,internal-db" "letsencrypt" "custom-certs"; do
   echo "compose.yml [$profiles]"
   J=$(render compose.yml "$profiles")
-  check "backend image pinned by versions.env" ".services.backend.image == \"docker.io/getplumber/platform-backend:$VERSION\"" "$J"
-  check "frontend image pinned by versions.env" ".services.frontend.image == \"docker.io/getplumber/platform-frontend:$VERSION\"" "$J"
+  check "backend image pinned to the latest.json release" ".services.backend.image == \"docker.io/getplumber/platform-backend:$VERSION\"" "$J"
+  check "frontend image pinned to the latest.json release" ".services.frontend.image == \"docker.io/getplumber/platform-frontend:$VERSION\"" "$J"
   check "backend base url is https://DOMAIN_NAME" '.services.backend.environment.PLUMBER_BASE_URL == "https://plumber.example.com"' "$J"
   check "oidc audience equals base url" '.services.backend.environment.PLUMBER_OIDC_AUDIENCE == "https://plumber.example.com"' "$J"
   check "allowed issuers default to GITLAB_URL" '.services.backend.environment.PLUMBER_OIDC_ALLOWED_ISSUERS == "https://gitlab.example.com"' "$J"
@@ -71,6 +73,8 @@ done
 if [ -f compose.local.yml ]; then
   echo "compose.local.yml"
   J=$(render compose.local.yml "")
+  check "local backend image pinned to the latest.json release" ".services.backend.image == \"docker.io/getplumber/platform-backend:$VERSION\"" "$J"
+  check "local frontend image pinned to the latest.json release" ".services.frontend.image == \"docker.io/getplumber/platform-frontend:$VERSION\"" "$J"
   check "local traefik publishes 3000 -> 80" '.services.traefik.ports | any(.published == "3000" and .target == 80)' "$J"
   check "local base url is http://localhost:3000" '.services.backend.environment.PLUMBER_BASE_URL == "http://localhost:3000"' "$J"
   check "local cookies are not Secure (plain http)" '.services.backend.environment.PLUMBER_COOKIE_SECURE == "false"' "$J"

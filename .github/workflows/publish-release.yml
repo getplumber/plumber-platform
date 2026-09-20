@@ -1,6 +1,6 @@
 # The platform-repo half of a release. The monorepo's release workflow opens a PR
-# here (branch release-vX.Y.Z) that bumps, in ONE commit: versions.env
-# (PLATFORM_VERSION), charts/plumber-platform/Chart.yaml (version + appVersion),
+# here (branch release-vX.Y.Z) that bumps, in ONE commit: the two app image tags
+# in compose.yml and compose.local.yml, charts/plumber-platform/Chart.yaml (version + appVersion),
 # charts/plumber-platform/values.yaml (both image tags), latest.json and
 # releases/vX.Y.Z.md. Thomas merges it: that merge is the release approval.
 # This workflow reacts to that merge and publishes what customers consume:
@@ -46,8 +46,12 @@ jobs:
           X="${V#v}"
           NOTES="releases/$V.md"
           [ -f "$NOTES" ] || { echo "::error::$NOTES not found - the release PR must add it"; exit 1; }
-          PIN=$(sed -n 's/^PLATFORM_VERSION=//p' versions.env)
-          [ "$PIN" = "$V" ] || { echo "::error::versions.env pins '$PIN', latest.json says '$V'"; exit 1; }
+          for f in compose.yml compose.local.yml; do
+            for img in platform-backend platform-frontend; do
+              grep -qE "^ *image: docker\.io/getplumber/$img:$V$" "$f" \
+                || { echo "::error::$f does not pin $img to '$V' (latest.json says '$V')"; exit 1; }
+            done
+          done
           CV=$(yq -r '.version' charts/plumber-platform/Chart.yaml)
           CA=$(yq -r '.appVersion' charts/plumber-platform/Chart.yaml)
           if [ "$CV" != "$X" ] || [ "$CA" != "$X" ]; then

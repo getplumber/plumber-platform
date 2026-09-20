@@ -7,7 +7,7 @@ and compliance control plane. Analysis stays in the open-source
 [CLI](https://github.com/getplumber/plumber), which pushes results here over native CI OIDC.
 
 This is the **v2** line: images `docker.io/getplumber/platform-backend` and
-`docker.io/getplumber/platform-frontend`, one version for both (`versions.env`), Helm chart
+`docker.io/getplumber/platform-frontend`, one version for both (pinned in the compose files), Helm chart
 `plumber-platform`. The previous product line (v1) lives in the separate repo
 [`github.com/getplumber/platform`](https://github.com/getplumber/platform): its Helm chart
 `plumber`, its Compose install and its installer are unchanged there. The two lines are not
@@ -40,7 +40,6 @@ Choose **Local** for a laptop install on `http://localhost:3000` (no TLS).
 git clone https://github.com/getplumber/plumber-platform.git plumber-platform
 cd plumber-platform
 cp .env.example .env
-cat versions.env >> .env
 ```
 
 Fill `.env`: `DOMAIN_NAME`, `GITLAB_URL`, `PLUMBER_TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32`,
@@ -78,14 +77,14 @@ The command refuses an already-configured instance, so it is safe to retry on a 
 ### Update, backup, restore
 
 ```bash
-./scripts/update.sh            # pulls the repo, syncs PLATFORM_VERSION from versions.env, restarts
+./scripts/update.sh            # pulls the repo (the new image tags come with it) and restarts
 ./scripts/backup.sh 18         # database dump + .env (+ CA files) into backups/, optional S3 upload
 ./scripts/restore.sh 18 <file> # the reverse
 ```
 
 Every release pins both images to one version. Upgrades are sequential and additive (the backend
-migrates the database on boot); rolling back is reverting `PLATFORM_VERSION` in `.env` and
-`docker compose up -d`. Never downgrade the database by hand.
+migrates the database on boot); rolling back is checking out the previous release tag
+(`git checkout vX.Y.Z`) and `docker compose up -d`. Never downgrade the database by hand.
 
 ## Kubernetes (Helm)
 
