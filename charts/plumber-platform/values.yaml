@@ -132,10 +132,10 @@ bootstrap:
   scope: "instance"
   # -- Root group path, required with scope: group.
   rootGroup: ""
-  # -- Existing Secret with the OAuth application secret (key clientSecret) and, optionally, an access token (key token).
+  # -- Existing Secret with the OAuth application secret (key clientSecret). The GitLab access
+  # token is not part of the bootstrap: an Admin sets it in Settings.
   existingSecret: ""
   existingSecretClientSecretKey: "clientSecret"
-  existingSecretTokenKey: "token"
   # -- Image used to wait for the backend's /readyz before bootstrapping.
   waitImage: curlimages/curl:8.11.1
 

@@ -52,15 +52,12 @@ tests:
               secretKeyRef:
                 name: bootstrap-secret
                 key: clientSecret
-      - contains:
+      # The access token is set in Settings by an Admin, never by the bootstrap.
+      - notContains:
           path: spec.template.spec.containers[0].env
           content:
             name: PLUMBER_BOOTSTRAP_TOKEN
-            valueFrom:
-              secretKeyRef:
-                name: bootstrap-secret
-                key: token
-                optional: true
+          any: true
       - contains:
           path: spec.template.spec.containers[0].env
           content:

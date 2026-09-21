@@ -26,11 +26,12 @@ curl -fsSL https://raw.githubusercontent.com/getplumber/plumber-platform/main/in
 
 Choose **Production**. The installer checks prerequisites, asks for the domain, the GitLab URL,
 the connection scope (whole instance or one root group), the GitLab OAuth application (it prints
-the exact redirect URI, `https://<domain>/api/v1/auth/callback`, and the link to create it), an
-optional access token, the TLS method (Let's Encrypt or your own certificates), an optional
-private CA and the database (bundled or external). It generates the secrets, writes `.env`, starts
-the stack and configures the GitLab connection. Then open `https://<domain>` and sign in with
-GitLab: the first account becomes the organisation Admin.
+the exact redirect URI, `https://<domain>/api/v1/auth/callback`, and the link to create it), the
+TLS method (Let's Encrypt or your own certificates), an optional private CA and the database
+(bundled or external). It generates the secrets, writes `.env`, starts the stack and configures the
+GitLab connection. Then open `https://<domain>` and sign in with GitLab as a Plumber Admin (a
+GitLab instance Admin, or at least Maintainer of the root group for a group connection) to finish
+the setup: the GitLab access token, SMTP and the licence are set in Settings.
 
 Choose **Local** for a laptop install on `http://localhost:3000` (no TLS).
 
@@ -69,9 +70,7 @@ docker compose exec -T -e PLUMBER_BOOTSTRAP_CLIENT_SECRET \
   backend plumber-bootstrap -base-url https://gitlab.example.com -client-id <application-id> -scope instance
 ```
 
-Use `-scope group -root-group <path>` to scope to one root group, and export
-`PLUMBER_BOOTSTRAP_TOKEN` the same way (add `-e PLUMBER_BOOTSTRAP_TOKEN`) to store an access token
-(`api` scope) in the same run.
+Use `-scope group -root-group <path>` to scope to one root group.
 The command refuses an already-configured instance, so it is safe to retry on a fresh install.
 
 ### Update, backup, restore
