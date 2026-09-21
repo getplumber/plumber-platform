@@ -52,7 +52,7 @@ bootstrap:
   gitlabUrl: https://gitlab.example.com
   clientId: <application-id>
   scope: instance                          # or group + rootGroup
-  existingSecret: plumber-bootstrap        # keys clientSecret, optional token
+  existingSecret: plumber-bootstrap        # key clientSecret
 ```
 
 The Job waits for the backend, whose first boot can take a few minutes (image pull, migrations). Pass

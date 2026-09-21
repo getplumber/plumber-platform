@@ -95,12 +95,6 @@ spec:
                 secretKeyRef:
                   name: {{ $secret | quote }}
                   key: {{ $b.existingSecretClientSecretKey | quote }}
-            - name: PLUMBER_BOOTSTRAP_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $secret | quote }}
-                  key: {{ $b.existingSecretTokenKey | quote }}
-                  optional: true
           {{- with .Values.backend.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

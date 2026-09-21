@@ -338,18 +338,7 @@ echo ""
 prompt GITLAB_OAUTH2_CLIENT_ID "Application ID"
 prompt_secret GITLAB_OAUTH2_CLIENT_SECRET "Secret"
 
-# Access token (optional): lets Plumber sync projects right away. Without it
-# the connection is stored and an Admin adds the token later in Settings.
-echo ""
-echo "───────────────────────────────────────"
-echo -e "${BOLD}GitLab access token${NC} ${DIM}(optional)${NC}"
-echo ""
-echo -e "${DIM}A group or personal access token with the 'api' scope, used by Plumber to${NC}"
-echo -e "${DIM}read projects and pipelines. It is stored encrypted, never in .env.${NC}"
-if [ "$PLUMBER_SCOPE" = "group" ]; then
-    echo -e "${DIM}With a group scope, the token also resolves the root group immediately.${NC}"
-fi
-prompt_secret_optional GITLAB_ORG_TOKEN "Access token"
+# The GitLab access token is not part of the install: an Admin sets it in Settings.
 
 # Certificate method & Database (production only)
 
@@ -561,8 +550,6 @@ print_bootstrap_hint() {
     echo "  read -rs -p \"OAuth application secret: \" PLUMBER_BOOTSTRAP_CLIENT_SECRET; echo; export PLUMBER_BOOTSTRAP_CLIENT_SECRET"
     echo -e "    ${BOLD}${COMPOSE_CMD} exec -T -e PLUMBER_BOOTSTRAP_CLIENT_SECRET \\"
     echo -e "      backend plumber-bootstrap -base-url ${GITLAB_URL} -client-id ${GITLAB_OAUTH2_CLIENT_ID} -scope ${PLUMBER_SCOPE}${ROOT_GROUP:+ -root-group ${ROOT_GROUP}}${NC}"
-    echo ""
-    echo "  Export PLUMBER_BOOTSTRAP_TOKEN the same way and add -e PLUMBER_BOOTSTRAP_TOKEN to store the access token in the same run."
 }
 
 run_bootstrap() {
@@ -590,17 +577,13 @@ run_bootstrap() {
     if [ "$PLUMBER_SCOPE" = "group" ]; then
         ARGS+=(-root-group "$ROOT_GROUP")
     fi
-    if [ -n "${GITLAB_ORG_TOKEN:-}" ]; then
-        export PLUMBER_BOOTSTRAP_TOKEN="$GITLAB_ORG_TOKEN"
-        EXEC_ENV+=(-e PLUMBER_BOOTSTRAP_TOKEN)
-    fi
     # shellcheck disable=SC2086
     if $COMPOSE_CMD exec -T "${EXEC_ENV[@]}" backend plumber-bootstrap "${ARGS[@]}"; then
         echo -e "${GREEN}✓${NC} GitLab connection configured"
-        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET PLUMBER_BOOTSTRAP_TOKEN
+        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET
     else
         echo -e "${RED}!${NC} Bootstrap failed (see the message above)."
-        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET PLUMBER_BOOTSTRAP_TOKEN
+        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET
         print_bootstrap_hint
         return 1
     fi
@@ -617,7 +600,12 @@ if prompt_confirm "Start Plumber now?"; then
     echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  Visit: ${BOLD}${PLUMBER_URL}${NC}"
-    echo -e "  ${DIM}The first GitLab account that signs in becomes this organisation's Admin.${NC}"
+    if [ "$PLUMBER_SCOPE" = "group" ]; then
+        echo -e "  ${DIM}Sign in with a GitLab account that is at least Maintainer of ${ROOT_GROUP}: it is a Plumber Admin${NC}"
+    else
+        echo -e "  ${DIM}Sign in with a GitLab instance Admin account: it is a Plumber Admin${NC}"
+    fi
+    echo -e "  ${DIM}and finishes the setup in Settings (access token, SMTP, licence).${NC}"
     echo ""
     echo "  Useful commands:"
     echo "    ${COMPOSE_CMD} ps       # Check service status"
