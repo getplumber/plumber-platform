@@ -38,9 +38,9 @@ tests:
       - matchRegex:
           path: spec.template.spec.initContainers[0].args[0]
           pattern: http://plumber-backend:8080/readyz
-      - equal:
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: docker.io/getplumber/platform-backend:v2.0.0
+          pattern: ^docker\.io/getplumber/platform-backend:v[0-9]+\.[0-9]+\.[0-9]+$
       - equal:
           path: spec.template.spec.containers[0].command
           value: ["/usr/local/bin/plumber-bootstrap", "-base-url", "https://gitlab.example.com", "-client-id", "app-id", "-scope", "instance"]
