@@ -13,9 +13,11 @@ tests:
       - equal:
           path: metadata.name
           value: plumber-front
-      - equal:
+      # The tag is the release pin, bumped by every release PR: assert the shape, not the value
+      # (publish-release.yml cross-checks the exact tag against latest.json).
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: docker.io/getplumber/platform-frontend:v2.0.0
+          pattern: ^docker\.io/getplumber/platform-frontend:v[0-9]+\.[0-9]+\.[0-9]+$
       - contains:
           path: spec.template.spec.volumes
           content:

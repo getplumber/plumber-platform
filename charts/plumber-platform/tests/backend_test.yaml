@@ -26,9 +26,11 @@ tests:
           value: 1200
   - it: pins the image from tag and wires liveness to /healthz and readiness to /readyz
     asserts:
-      - equal:
+      # The tag is the release pin, bumped by every release PR: assert the shape, not the value
+      # (publish-release.yml cross-checks the exact tag against latest.json).
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: docker.io/getplumber/platform-backend:v2.0.0
+          pattern: ^docker\.io/getplumber/platform-backend:v[0-9]+\.[0-9]+\.[0-9]+$
       - equal:
           path: spec.template.spec.containers[0].livenessProbe.httpGet.path
           value: /healthz
@@ -45,9 +47,9 @@ tests:
     set:
       imageRegistry: registry.example.com
     asserts:
-      - equal:
+      - matchRegex:
           path: spec.template.spec.containers[0].image
-          value: registry.example.com/getplumber/platform-backend:v2.0.0
+          pattern: ^registry\.example\.com/getplumber/platform-backend:v[0-9]+\.[0-9]+\.[0-9]+$
   - it: sets the public origin, audience and issuers from platform values
     asserts:
       - contains:
