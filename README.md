@@ -27,9 +27,10 @@ curl -fsSL https://raw.githubusercontent.com/getplumber/plumber-platform/main/in
 Choose **Production**. The installer checks prerequisites, asks for the domain, the GitLab URL,
 the connection scope (whole instance or one root group), the GitLab OAuth application (it prints
 the exact redirect URI, `https://<domain>/api/v1/auth/callback`, and the link to create it), the
-TLS method (Let's Encrypt or your own certificates), an optional private CA and the database
-(bundled or external). It generates the secrets, writes `.env`, starts the stack and configures the
-GitLab connection. Then open `https://<domain>` and sign in with GitLab as a Plumber Admin (a
+an optional copy of the Plumber CI/CD component into your GitLab (published to its CI/CD catalog,
+see below), the TLS method (Let's Encrypt or your own certificates), an optional private CA and
+the database (bundled or external). It generates the secrets, writes `.env`, starts the stack and
+configures the GitLab connection. Then open `https://<domain>` and sign in with GitLab as a Plumber Admin (a
 GitLab instance Admin, or at least Maintainer of the root group for a group connection) to finish
 the setup: the GitLab access token, SMTP and the licence are set in Settings.
 
@@ -73,10 +74,29 @@ docker compose exec -T -e PLUMBER_BOOTSTRAP_CLIENT_SECRET \
 Use `-scope group -root-group <path>` to scope to one root group.
 The command refuses an already-configured instance, so it is safe to retry on a fresh install.
 
+### Plumber component in your GitLab
+
+Pipelines include the Plumber CI/CD component from `gitlab.com/getplumber/plumber`. When your
+GitLab cannot reach gitlab.com (or you want a copy you control), the installer offers to copy it;
+the same step runs on its own:
+
+```bash
+read -rs -p "GitLab token: " PLUMBER_COMPONENT_TOKEN; echo; export PLUMBER_COMPONENT_TOKEN
+./scripts/component-mirror.sh --gitlab-url https://gitlab.example.com --group my-group
+```
+
+It creates or reuses `my-group/plumber` (with the description the catalog requires), copies every
+branch and tag, flags the project as a CI/CD catalog project, runs the release pipeline on the
+latest tag and verifies the version is in the catalog before reporting `Component published`. The
+token (`api` scope, Owner of the group or instance Admin) is read from the environment for this
+run only. A runner able to pull `registry.gitlab.com/gitlab-org/release-cli` must be available to
+the project. Then, in Plumber, an Admin sets `Settings > Component` to `my-group/plumber`.
+
 ### Update, backup, restore
 
 ```bash
 ./scripts/update.sh            # pulls the repo (the new image tags come with it) and restarts
+./scripts/update.sh --component # same, then refreshes and publishes the component copy
 ./scripts/backup.sh 18         # database dump + .env (+ CA files) into backups/, optional S3 upload
 ./scripts/restore.sh 18 <file> # the reverse
 ```

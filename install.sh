@@ -340,6 +340,30 @@ prompt_secret GITLAB_OAUTH2_CLIENT_SECRET "Secret"
 
 # The GitLab access token is not part of the install: an Admin sets it in Settings.
 
+# CI/CD component copy (optional): a project in the customer's GitLab that mirrors
+# gitlab.com/getplumber/plumber and publishes its latest version to the CI/CD catalog.
+# The token is used by scripts/component-mirror.sh for this run only, never stored.
+COMPONENT_REQUESTED=false
+COMPONENT_GROUP=""
+echo ""
+echo "───────────────────────────────────────"
+echo -e "${BOLD}Plumber CI/CD component${NC} ${DIM}(optional)${NC}"
+echo ""
+echo -e "${DIM}Pipelines include the Plumber component from gitlab.com/getplumber/plumber. If your GitLab${NC}"
+echo -e "${DIM}cannot reach gitlab.com, or you prefer a local copy, the installer can copy it into a project${NC}"
+echo -e "${DIM}of your instance and publish it to your CI/CD catalog. This needs:${NC}"
+echo -e "${DIM}  - a token with the 'api' scope from an Owner of the target group (or an instance Admin),${NC}"
+echo -e "${DIM}    used for this run only${NC}"
+echo -e "${DIM}  - a runner available to the new project, able to pull registry.gitlab.com/gitlab-org/release-cli${NC}"
+if prompt_confirm "Copy the Plumber component into your GitLab and publish it?" "N"; then
+    COMPONENT_REQUESTED=true
+    prompt COMPONENT_GROUP "Group that receives the 'plumber' project (full path)" "${ROOT_GROUP}"
+    COMPONENT_GROUP="${COMPONENT_GROUP#/}"
+    COMPONENT_GROUP="${COMPONENT_GROUP%/}"
+    prompt_secret PLUMBER_COMPONENT_TOKEN "GitLab token (Owner of ${COMPONENT_GROUP}, api scope)"
+    export PLUMBER_COMPONENT_TOKEN
+fi
+
 # Certificate method & Database (production only)
 
 if [ "$DEPLOY_TYPE" = "1" ]; then
@@ -468,6 +492,11 @@ write_common_env() {
     env_line PLUMBER_TOKEN_ENCRYPTION_KEY "$PLUMBER_TOKEN_ENCRYPTION_KEY"
     env_line PLUMBER_DB_PASSWORD "$PLUMBER_DB_PASSWORD"
     env_line PLUMBER_REDIS_PASSWORD "$PLUMBER_REDIS_PASSWORD"
+    if [ "$COMPONENT_REQUESTED" = true ]; then
+        echo ""
+        echo "# Local copy of the Plumber CI/CD component (refresh it with ./scripts/update.sh --component)"
+        env_line PLUMBER_COMPONENT_PROJECT "${COMPONENT_GROUP}/plumber"
+    fi
 }
 
 if [ "$DEPLOY_TYPE" = "2" ]; then
@@ -589,11 +618,29 @@ run_bootstrap() {
     fi
 }
 
+# The component copy runs last so a slow or failing publish never leaves the platform
+# half-installed. Its verdict is the installer's: not published means a non-zero exit.
+INSTALL_EXIT=0
+run_component_step() {
+    [ "$COMPONENT_REQUESTED" = true ] || return 0
+    echo ""
+    if bash scripts/component-mirror.sh --gitlab-url "$GITLAB_URL" --group "$COMPONENT_GROUP"; then
+        return 0
+    fi
+    INSTALL_EXIT=1
+    echo ""
+    echo "  To publish it later, run from this directory:"
+    echo "  read -rs -p \"GitLab token: \" PLUMBER_COMPONENT_TOKEN; echo; export PLUMBER_COMPONENT_TOKEN"
+    echo -e "    ${BOLD}./scripts/component-mirror.sh --gitlab-url ${GITLAB_URL} --group ${COMPONENT_GROUP}${NC}"
+    return 1
+}
+
 if prompt_confirm "Start Plumber now?"; then
     echo ""
     echo "Starting Plumber..."
     $COMPOSE_CMD up -d
     run_bootstrap || true
+    run_component_step || true
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
     echo -e "${GREEN}║      Plumber is starting!            ║${NC}"
@@ -611,9 +658,17 @@ if prompt_confirm "Start Plumber now?"; then
     echo "    ${COMPOSE_CMD} ps       # Check service status"
     echo "    ${COMPOSE_CMD} logs -f  # View logs"
     echo "    ./scripts/update.sh     # Update to latest version"
+    if [ "$COMPONENT_REQUESTED" = true ]; then
+        echo "    ./scripts/update.sh --component  # Also refresh the component copy"
+    fi
     echo "    ./scripts/backup.sh 18   # Back up the database and .env"
     echo ""
+    if [ "$INSTALL_EXIT" != 0 ]; then
+        echo -e "${RED}The Plumber component is NOT published yet (see above). Plumber itself is running.${NC}"
+        echo ""
+    fi
 else
+    run_component_step || true
     echo ""
     echo -e "${GREEN}Configuration complete!${NC}"
     echo ""
@@ -623,4 +678,10 @@ else
     echo -e "  Then visit: ${BOLD}${PLUMBER_URL}${NC}"
     print_bootstrap_hint
     echo ""
+    if [ "$INSTALL_EXIT" != 0 ]; then
+        echo -e "${RED}The Plumber component is NOT published yet (see above).${NC}"
+        echo ""
+    fi
 fi
+unset PLUMBER_COMPONENT_TOKEN
+exit "$INSTALL_EXIT"

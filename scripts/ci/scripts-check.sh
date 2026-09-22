@@ -51,4 +51,14 @@ PLUMBER_PREFLIGHT_OFFLINE=1 bash scripts/preflight.sh --post >/dev/null || { ech
 sed -i "s|^PLUMBER_TOKEN_ENCRYPTION_KEY=.*|PLUMBER_TOKEN_ENCRYPTION_KEY=\"$(printf 'a%.0s' $(seq 32))\"|" .env
 if PLUMBER_PREFLIGHT_OFFLINE=1 bash scripts/preflight.sh --post >/dev/null; then echo "FAIL: preflight accepted a 32-char key"; exit 1; fi
 echo "  ok   preflight.sh --post"
+
+# component-mirror.sh: argument contract and the dry run (no network involved)
+OUT=$(bash scripts/component-mirror.sh --dry-run --gitlab-url gitlab.example.com/ --group /acme/) || { echo "FAIL: dry run should exit 0"; exit 1; }
+grep -q "Project:       acme/plumber" <<<"$OUT" || { echo "FAIL: dry run should resolve acme/plumber"; echo "$OUT"; exit 1; }
+grep -q "GitLab:        https://gitlab.example.com$" <<<"$OUT" || { echo "FAIL: dry run should normalise the GitLab URL"; echo "$OUT"; exit 1; }
+grep -q "component_path = acme/plumber" <<<"$OUT" || { echo "FAIL: dry run should print the Settings value"; exit 1; }
+if bash scripts/component-mirror.sh --dry-run --gitlab-url https://gitlab.example.com >/dev/null 2>&1; then echo "FAIL: --group is required"; exit 1; fi
+if env -u PLUMBER_COMPONENT_TOKEN bash scripts/component-mirror.sh --gitlab-url https://gitlab.example.com --group acme >/dev/null 2>&1; then echo "FAIL: a missing token must fail before any network call"; exit 1; fi
+if bash scripts/component-mirror.sh --dry-run --gitlab-url https://gitlab.example.com --group acme --bogus >/dev/null 2>&1; then echo "FAIL: unknown options must be rejected"; exit 1; fi
+echo "  ok   component-mirror.sh"
 echo "scripts-check: all good"
