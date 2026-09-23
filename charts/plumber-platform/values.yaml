@@ -50,7 +50,7 @@ front:
   # -- Image name without registry prefix (used when imageRegistry is set).
   imageName: getplumber/platform-frontend
   imagePullPolicy: IfNotPresent
-  tag: v2.2.0
+  tag: v2.3.0
   replicaCount: 1
   revisionHistoryLimit: 5
   port: 3000
@@ -83,7 +83,7 @@ backend:
   image: docker.io/getplumber/platform-backend
   imageName: getplumber/platform-backend
   imagePullPolicy: IfNotPresent
-  tag: v2.2.0
+  tag: v2.3.0
   # -- One process runs the API, the background workers and the schedulers, and
   # migrates the database on boot. Keep 1 replica and the Recreate strategy: two
   # versions must never run at once (an old replica would claim and fail new job kinds).
