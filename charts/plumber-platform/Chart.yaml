@@ -2,8 +2,8 @@ apiVersion: v2
 name: plumber-platform
 description: Helm chart for the Plumber Platform (v2 line). The v1 chart is `plumber`.
 type: application
-version: "2.2.0"
-appVersion: "2.2.0"
+version: "2.3.0"
+appVersion: "2.3.0"
 home: https://github.com/getplumber/plumber-platform/
 sources:
   - https://github.com/getplumber/plumber-platform
