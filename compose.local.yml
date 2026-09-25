@@ -26,7 +26,7 @@ services:
       - intranet
 
   frontend:
-    image: docker.io/getplumber/platform-frontend:v2.3.0
+    image: docker.io/getplumber/platform-frontend:v2.4.0
     restart: unless-stopped
     environment:
       - API_INTERNAL_URL=http://backend:8080/api
@@ -46,7 +46,7 @@ services:
       - intranet
 
   backend:
-    image: docker.io/getplumber/platform-backend:v2.3.0
+    image: docker.io/getplumber/platform-backend:v2.4.0
     restart: unless-stopped
     environment:
       - PLUMBER_LISTEN_ADDR=0.0.0.0
