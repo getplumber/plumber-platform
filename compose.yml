@@ -14,7 +14,7 @@ services:
   ############
 
   frontend:
-    image: docker.io/getplumber/platform-frontend:v2.5.0
+    image: docker.io/getplumber/platform-frontend:v2.5.1
     restart: unless-stopped
     environment:
       # Server-side rendering calls the backend over the compose network.
@@ -41,7 +41,7 @@ services:
     # One process: API, background workers, schedulers and database migrations
     # (run on boot). Distroless image, non-root uid 65532, no shell, so there is
     # no in-container healthcheck: probe /healthz and /readyz from outside.
-    image: docker.io/getplumber/platform-backend:v2.5.0
+    image: docker.io/getplumber/platform-backend:v2.5.1
     restart: unless-stopped
     environment:
       - PLUMBER_LISTEN_ADDR=0.0.0.0
