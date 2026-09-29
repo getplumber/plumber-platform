@@ -4,8 +4,9 @@
 # charts/plumber-platform/values.yaml (both image tags), latest.json and
 # releases/vX.Y.Z.md. Thomas merges it: that merge is the release approval.
 # This workflow reacts to that merge and publishes what customers consume:
-# the git tag, the GitHub Release (notes + packaged chart) and the Helm repo
-# index on this repo's gh-pages (https://getplumber.github.io/plumber-platform).
+# the git tag, the GitHub Release (notes + packaged chart + the v1migrate
+# migration tool the monorepo staged on it as a draft) and the Helm repo index
+# on this repo's gh-pages (https://getplumber.github.io/plumber-platform).
 # No CNAME. It never opens or approves anything.
 #
 # Narrow trigger (paths: latest.json) so an unrelated push to main never fires it.
@@ -68,6 +69,15 @@ jobs:
             echo "notes=$NOTES"
           } >> "$GITHUB_OUTPUT"
 
+      # The release already exists here as a DRAFT: before opening the release
+      # PR, the monorepo's release workflow creates it and attaches the
+      # v1migrate assets (the customer-run v1 to v2 configuration migration
+      # tool, whose source is closed and so cannot be built in this repo).
+      # Publishing that draft is what makes those assets public, so this step
+      # publishes it in place of creating a fresh release, and refuses to
+      # publish one that is missing them: the same loud-failure contract as the
+      # version cross-check above. A draft carries no tag and is invisible to
+      # customers, so a release that is never approved leaves nothing behind.
       - name: tag + github release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,10 +93,27 @@ jobs:
             git tag "$V"
             git push origin "$V"
           fi
-          if gh release view "$V" >/dev/null 2>&1; then
-            echo "release $V already exists - keeping it"
+          if ! gh release view "$V" >/dev/null 2>&1; then
+            echo "::error::no release $V exists here, not even a draft. The monorepo release workflow stages one with the v1migrate assets before it opens the release PR; re-run its 'release' workflow on the same commit (every step of it is idempotent), then re-run this job."
+            exit 1
+          fi
+          # Every asset the migration procedure tells the customer to download
+          # (tools/v1migrate/RUNBOOK.md, "Before the window").
+          have=$(gh release view "$V" --json assets --jq '.assets[].name')
+          missing=()
+          for a in v1migrate-linux-amd64 v1migrate-linux-arm64 \
+                   v1migrate-darwin-amd64 v1migrate-darwin-arm64 \
+                   export.sql v1migrate-checksums.txt; do
+            grep -qxF "$a" <<<"$have" || missing+=("$a")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::release $V is missing the v1migrate asset(s): ${missing[*]}. Re-run the monorepo 'release' workflow on the same commit to re-stage them, then re-run this job."
+            exit 1
+          fi
+          if [ "$(gh release view "$V" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "$V" --draft=false --title "$V" --notes-file "$NOTES"
           else
-            gh release create "$V" --title "$V" --notes-file "$NOTES"
+            echo "release $V already published - keeping it"
           fi
 
       - name: package the chart and attach it to the release
