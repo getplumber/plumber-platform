@@ -26,6 +26,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Run Plumber
-        uses: getplumber/plumber@a697e9c316b058d279861719c73b87093fb5a60f # v0.3.86
+        uses: getplumber/plumber@03c6550bdb611ef5712e25e499c2260f91f3299a # v0.5.16
         with:
           score-push: true   # publish the Plumber Score badge (repo name + score become public)
