@@ -281,10 +281,14 @@ PROJECT_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]
 if [ -n "$PROJECT_NAME" ]; then
     # The working directory recorded on each container of that project. Exact,
     # and needs nothing but docker.
+    # `|| true` on the whole pipeline, not decoration: grep exits 1 when it
+    # filters everything out, which is the NORMAL case on a host with no
+    # Plumber yet, and `set -e` would abort the installer before its first
+    # prompt. Found by installing on a freshly cleaned host.
     OTHER_DIRS="$(docker ps -a \
         --filter "label=com.docker.compose.project=${PROJECT_NAME}" \
         --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null \
-        | grep -v "^$(pwd)$" | grep -v '^$' | sort -u)"
+        | grep -v "^$(pwd)$" | grep -v '^$' | sort -u || true)"
     if [ -n "$OTHER_DIRS" ]; then
         echo -e "${RED}Error:${NC} the Compose project \"${PROJECT_NAME}\" already exists on this host, from:"
         echo "$OTHER_DIRS" | sed 's/^/      /'
