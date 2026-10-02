@@ -23,7 +23,10 @@ DIM='\033[2m'
 NC='\033[0m'
 
 REPO_URL="https://github.com/getplumber/plumber-platform.git"
-REPO_DIR="plumber-platform"
+RAW_INSTALL_URL="https://raw.githubusercontent.com/getplumber/plumber-platform/main/install.sh"
+# PLUMBER_DIR lets an operator put the checkout somewhere else, which is the
+# way out when the default name is already taken (see the guard below).
+REPO_DIR="${PLUMBER_DIR:-plumber-platform}"
 
 # =============================================================================
 # Helpers
@@ -201,6 +204,35 @@ if [ ! -f compose.yml ] || [ ! -f scripts/preflight.sh ]; then
     fi
 
     if [ -d "$REPO_DIR" ]; then
+        # Never pull into a directory that is not this repository.
+        #
+        # The v1 installer (github.com/getplumber/platform) clones into a
+        # directory with this same name, so on any host that still runs v1 the
+        # default target is already the LIVE v1 checkout. Pulling there would
+        # move a running v1 to a different commit, changing its compose file
+        # and image tags under it, and v2 would never be installed at all.
+        existing_remote="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
+        case "$(printf '%s' "${existing_remote%.git}" | tr '[:upper:]' '[:lower:]')" in
+            *getplumber/plumber-platform)
+                : # this repository, safe to update
+                ;;
+            *)
+                echo -e "${RED}Error:${NC} ${REPO_DIR}/ already exists and is not a checkout of this repository."
+                if [ -n "$existing_remote" ]; then
+                    echo "  It is a clone of ${existing_remote}."
+                else
+                    echo "  It is not a git repository."
+                fi
+                echo "  Nothing has been changed."
+                echo ""
+                echo "  Plumber v1 installs into a directory with this same name, so this is most"
+                echo "  likely your existing v1. Install v2 beside it, in its own directory:"
+                echo ""
+                echo "      PLUMBER_DIR=plumber-v2 bash -c \"\$(curl -fsSL ${RAW_INSTALL_URL})\""
+                echo ""
+                exit 1
+                ;;
+        esac
         echo "Directory ${REPO_DIR} already exists, updating..."
         cd "$REPO_DIR"
         git pull --ff-only || true
@@ -216,7 +248,9 @@ fi
 if [ -f .env ]; then
     echo -e "${RED}Error:${NC} .env already exists in $(pwd)."
     echo "  It holds PLUMBER_TOKEN_ENCRYPTION_KEY, which seals every stored GitLab secret and cannot be regenerated"
-    echo "  without losing them. To upgrade an existing install run ./scripts/update.sh; to start over, move .env away first."
+    echo "  without losing them. To upgrade this install run ./scripts/update.sh; to start over, move .env away first."
+    echo "  To install a SECOND, separate instance (for example v2 beside v1), give it its own directory:"
+    echo "      PLUMBER_DIR=plumber-v2 bash -c \"\$(curl -fsSL ${RAW_INSTALL_URL})\""
     exit 1
 fi
 
