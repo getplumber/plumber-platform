@@ -255,6 +255,53 @@ if [ -f .env ]; then
 fi
 
 # =============================================================================
+# Step 1b: Refuse to adopt another Plumber's Compose project
+# =============================================================================
+#
+# compose.yml declares `name: "plumber"`, and so does the v1 compose file
+# (github.com/getplumber/platform). Docker Compose keys everything off that
+# project name, not off the directory, so running `up` here while v1 exists
+# does not create a second stack: it ADOPTS v1's. Observed on a v1 host, from
+# a checkout in its own directory:
+#
+#   docker compose ls
+#   NAME     CONFIG FILES
+#   plumber  /root/plumber-v2/compose.yml,/root/plumber-platform/compose.yml
+#
+# v1's backend and frontend containers were replaced with v2 images and its
+# postgres container was recreated with v2's credentials on v1's data volume
+# (plumber_postgres-data). Nothing was lost only because postgres skips initdb
+# on a non-empty data directory, so v2's role did not exist and its backend
+# crash-looped on authentication. With a matching password, or a v1 whose
+# database user happens to be `plumber`, v2's migrations would have run against
+# the live v1 database.
+#
+# So: if this project name already has containers from another directory, stop.
+PROJECT_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' compose.yml | head -n 1)"
+if [ -n "$PROJECT_NAME" ]; then
+    # The working directory recorded on each container of that project. Exact,
+    # and needs nothing but docker.
+    OTHER_DIRS="$(docker ps -a \
+        --filter "label=com.docker.compose.project=${PROJECT_NAME}" \
+        --format '{{.Label "com.docker.compose.project.working_dir"}}' 2>/dev/null \
+        | grep -v "^$(pwd)$" | grep -v '^$' | sort -u)"
+    if [ -n "$OTHER_DIRS" ]; then
+        echo -e "${RED}Error:${NC} the Compose project \"${PROJECT_NAME}\" already exists on this host, from:"
+        echo "$OTHER_DIRS" | sed 's/^/      /'
+        echo "  Nothing has been changed."
+        echo ""
+        echo "  Plumber v1 uses this same project name, so starting here would take over that"
+        echo "  stack and its data volume rather than install a second one. Docker Compose"
+        echo "  identifies a stack by its project name, not by its directory."
+        echo ""
+        echo "  Install v2 on a different host. Keep v1 where it is until you have migrated"
+        echo "  (see the migration guide), then retire it."
+        echo ""
+        exit 1
+    fi
+fi
+
+# =============================================================================
 # Step 2: Choose deployment type
 # =============================================================================
 
