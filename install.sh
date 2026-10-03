@@ -306,6 +306,53 @@ if [ -n "$PROJECT_NAME" ]; then
 fi
 
 # =============================================================================
+# Step 1c: Refuse to start on another Plumber's database volume
+# =============================================================================
+#
+# Step 1b keys off CONTAINERS, and `docker compose down` removes those while
+# keeping the volumes. So on a host that ran v1, after a perfectly ordinary
+# `docker compose down`, step 1b passes and nothing stands between v2 and
+# v1's database: compose would reuse the existing `plumber_postgres-data`,
+# postgres skips initdb on a non-empty data directory, v2's role is never
+# created, and the backend crash-loops on authentication with no hint as to
+# why. That is the same failure step 1b describes, reached by the path a
+# migrating customer actually takes (migration guide, step 2, option B).
+#
+# install.sh only ever means a FRESH install: it has already refused above if
+# this directory has an .env, and an existing install is upgraded with
+# scripts/update.sh instead. So there is no case where a database volume for
+# this project should already exist, and we can refuse without ambiguity.
+#
+# Removing it is deliberately NOT offered here: deleting a database is the
+# operator's decision, taken with a backup in hand, never an installer's.
+if [ -n "$PROJECT_NAME" ]; then
+    DB_VOLUME="${PROJECT_NAME}_postgres-data"
+    if docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qx "$DB_VOLUME"; then
+        echo -e "${RED}Error:${NC} the Docker volume \"${DB_VOLUME}\" already exists on this host."
+        echo "  Nothing has been changed."
+        echo ""
+        echo "  This is a fresh install, so it would start on a database it did not create."
+        echo "  Plumber v1 uses this same volume name: if you have just stopped a v1 here,"
+        echo "  that volume still holds its database, and postgres does not re-initialise a"
+        echo "  data directory that already has one. v2 would come up unable to log into it."
+        echo ""
+        echo "  If you still need what is in it, back it up and keep the dump off this host:"
+        echo ""
+        echo "      docker run --rm -v ${DB_VOLUME}:/v -v \"\$PWD\":/out alpine \\"
+        echo "          tar czf /out/plumber-db-volume.tgz -C /v ."
+        echo ""
+        echo "  Then remove it and run this installer again:"
+        echo ""
+        echo "      docker volume rm ${DB_VOLUME}"
+        echo ""
+        echo "  Migrating from v1? Follow the migration guide: export your v1 configuration"
+        echo "  BEFORE removing this volume, or it goes with it."
+        echo ""
+        exit 1
+    fi
+fi
+
+# =============================================================================
 # Step 2: Choose deployment type
 # =============================================================================
 
@@ -651,11 +698,19 @@ echo ""
 
 if [ "$DEPLOY_TYPE" = "2" ]; then
     COMPOSE_CMD="docker compose -f compose.local.yml"
-    NETWORK_NAME="plumber-local_intranet"
+    COMPOSE_FILE="compose.local.yml"
 else
     COMPOSE_CMD="docker compose"
-    NETWORK_NAME="plumber_intranet"
+    COMPOSE_FILE="compose.yml"
 fi
+
+# Read the network off the Compose project name in the file actually in use,
+# instead of repeating the literal here. The readiness probe below joins this
+# network to reach the backend, and a probe pointed at a network that does not
+# exist cannot succeed: every attempt fails, the backend is declared not ready
+# whatever it is doing, and bootstrap is skipped. Deriving it keeps the two
+# from drifting apart silently.
+NETWORK_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$COMPOSE_FILE" | head -n 1)_intranet"
 
 print_bootstrap_hint() {
     echo ""
@@ -706,6 +761,8 @@ run_bootstrap() {
 # The component copy runs last so a slow or failing publish never leaves the platform
 # half-installed. Its verdict is the installer's: not published means a non-zero exit.
 INSTALL_EXIT=0
+BOOTSTRAP_FAILED=false
+COMPONENT_FAILED=false
 run_component_step() {
     [ "$COMPONENT_REQUESTED" = true ] || return 0
     echo ""
@@ -713,6 +770,7 @@ run_component_step() {
         return 0
     fi
     INSTALL_EXIT=1
+    COMPONENT_FAILED=true
     echo ""
     echo "  To publish it later, run from this directory:"
     echo "  read -rs -p \"GitLab token: \" PLUMBER_COMPONENT_TOKEN; echo; export PLUMBER_COMPONENT_TOKEN"
@@ -724,7 +782,11 @@ if prompt_confirm "Start Plumber now?"; then
     echo ""
     echo "Starting Plumber..."
     $COMPOSE_CMD up -d
-    run_bootstrap || true
+    # Not `|| true`. Without the GitLab connection the instance row stays
+    # scope-NULL, every role resolves to none, and NOBODY can sign in: the
+    # install is unusable, not imperfect. It used to exit 0 under the green
+    # banner, so an operator (or a script) read it as success.
+    run_bootstrap || { BOOTSTRAP_FAILED=true; INSTALL_EXIT=1; }
     run_component_step || true
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
@@ -732,12 +794,16 @@ if prompt_confirm "Start Plumber now?"; then
     echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  Visit: ${BOLD}${PLUMBER_URL}${NC}"
-    if [ "$PLUMBER_SCOPE" = "group" ]; then
-        echo -e "  ${DIM}Sign in with a GitLab account that is at least Maintainer of ${ROOT_GROUP}: it is a Plumber Admin${NC}"
+    if [ "$BOOTSTRAP_FAILED" = true ]; then
+        echo -e "  ${RED}You cannot sign in yet: the GitLab connection is not configured.${NC}"
     else
-        echo -e "  ${DIM}Sign in with a GitLab instance Admin account: it is a Plumber Admin${NC}"
+        if [ "$PLUMBER_SCOPE" = "group" ]; then
+            echo -e "  ${DIM}Sign in with a GitLab account that is at least Maintainer of ${ROOT_GROUP}: it is a Plumber Admin${NC}"
+        else
+            echo -e "  ${DIM}Sign in with a GitLab instance Admin account: it is a Plumber Admin${NC}"
+        fi
+        echo -e "  ${DIM}and finishes the setup in Settings (access token, SMTP, licence).${NC}"
     fi
-    echo -e "  ${DIM}and finishes the setup in Settings (access token, SMTP, licence).${NC}"
     echo ""
     echo "  Useful commands:"
     echo "    ${COMPOSE_CMD} ps       # Check service status"
@@ -748,8 +814,13 @@ if prompt_confirm "Start Plumber now?"; then
     fi
     echo "    ./scripts/backup.sh 18   # Back up the database and .env"
     echo ""
-    if [ "$INSTALL_EXIT" != 0 ]; then
+    if [ "$COMPONENT_FAILED" = true ]; then
         echo -e "${RED}The Plumber component is NOT published yet (see above). Plumber itself is running.${NC}"
+        echo ""
+    fi
+    if [ "$BOOTSTRAP_FAILED" = true ]; then
+        echo -e "${RED}The GitLab connection is NOT configured, so no one can sign in yet.${NC}"
+        echo -e "${RED}Plumber itself is running. Run the command above to finish, then sign in.${NC}"
         echo ""
     fi
 else
@@ -763,7 +834,7 @@ else
     echo -e "  Then visit: ${BOLD}${PLUMBER_URL}${NC}"
     print_bootstrap_hint
     echo ""
-    if [ "$INSTALL_EXIT" != 0 ]; then
+    if [ "$COMPONENT_FAILED" = true ]; then
         echo -e "${RED}The Plumber component is NOT published yet (see above).${NC}"
         echo ""
     fi
