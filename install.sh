@@ -306,6 +306,53 @@ if [ -n "$PROJECT_NAME" ]; then
 fi
 
 # =============================================================================
+# Step 1c: Refuse to start on another Plumber's database volume
+# =============================================================================
+#
+# Step 1b keys off CONTAINERS, and `docker compose down` removes those while
+# keeping the volumes. So on a host that ran v1, after a perfectly ordinary
+# `docker compose down`, step 1b passes and nothing stands between v2 and
+# v1's database: compose would reuse the existing `plumber_postgres-data`,
+# postgres skips initdb on a non-empty data directory, v2's role is never
+# created, and the backend crash-loops on authentication with no hint as to
+# why. That is the same failure step 1b describes, reached by the path a
+# migrating customer actually takes (migration guide, step 2, option B).
+#
+# install.sh only ever means a FRESH install: it has already refused above if
+# this directory has an .env, and an existing install is upgraded with
+# scripts/update.sh instead. So there is no case where a database volume for
+# this project should already exist, and we can refuse without ambiguity.
+#
+# Removing it is deliberately NOT offered here: deleting a database is the
+# operator's decision, taken with a backup in hand, never an installer's.
+if [ -n "$PROJECT_NAME" ]; then
+    DB_VOLUME="${PROJECT_NAME}_postgres-data"
+    if docker volume ls --format '{{.Name}}' 2>/dev/null | grep -qx "$DB_VOLUME"; then
+        echo -e "${RED}Error:${NC} the Docker volume \"${DB_VOLUME}\" already exists on this host."
+        echo "  Nothing has been changed."
+        echo ""
+        echo "  This is a fresh install, so it would start on a database it did not create."
+        echo "  Plumber v1 uses this same volume name: if you have just stopped a v1 here,"
+        echo "  that volume still holds its database, and postgres does not re-initialise a"
+        echo "  data directory that already has one. v2 would come up unable to log into it."
+        echo ""
+        echo "  If you still need what is in it, back it up and keep the dump off this host:"
+        echo ""
+        echo "      docker run --rm -v ${DB_VOLUME}:/v -v \"\$PWD\":/out alpine \\"
+        echo "          tar czf /out/plumber-db-volume.tgz -C /v ."
+        echo ""
+        echo "  Then remove it and run this installer again:"
+        echo ""
+        echo "      docker volume rm ${DB_VOLUME}"
+        echo ""
+        echo "  Migrating from v1? Follow the migration guide: export your v1 configuration"
+        echo "  BEFORE removing this volume, or it goes with it."
+        echo ""
+        exit 1
+    fi
+fi
+
+# =============================================================================
 # Step 2: Choose deployment type
 # =============================================================================
 
