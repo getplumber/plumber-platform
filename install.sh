@@ -698,11 +698,19 @@ echo ""
 
 if [ "$DEPLOY_TYPE" = "2" ]; then
     COMPOSE_CMD="docker compose -f compose.local.yml"
-    NETWORK_NAME="plumber-local_intranet"
+    COMPOSE_FILE="compose.local.yml"
 else
     COMPOSE_CMD="docker compose"
-    NETWORK_NAME="plumber_intranet"
+    COMPOSE_FILE="compose.yml"
 fi
+
+# Read the network off the Compose project name in the file actually in use,
+# instead of repeating the literal here. The readiness probe below joins this
+# network to reach the backend, and a probe pointed at a network that does not
+# exist cannot succeed: every attempt fails, the backend is declared not ready
+# whatever it is doing, and bootstrap is skipped. Deriving it keeps the two
+# from drifting apart silently.
+NETWORK_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$COMPOSE_FILE" | head -n 1)_intranet"
 
 print_bootstrap_hint() {
     echo ""
@@ -753,6 +761,8 @@ run_bootstrap() {
 # The component copy runs last so a slow or failing publish never leaves the platform
 # half-installed. Its verdict is the installer's: not published means a non-zero exit.
 INSTALL_EXIT=0
+BOOTSTRAP_FAILED=false
+COMPONENT_FAILED=false
 run_component_step() {
     [ "$COMPONENT_REQUESTED" = true ] || return 0
     echo ""
@@ -760,6 +770,7 @@ run_component_step() {
         return 0
     fi
     INSTALL_EXIT=1
+    COMPONENT_FAILED=true
     echo ""
     echo "  To publish it later, run from this directory:"
     echo "  read -rs -p \"GitLab token: \" PLUMBER_COMPONENT_TOKEN; echo; export PLUMBER_COMPONENT_TOKEN"
@@ -771,7 +782,11 @@ if prompt_confirm "Start Plumber now?"; then
     echo ""
     echo "Starting Plumber..."
     $COMPOSE_CMD up -d
-    run_bootstrap || true
+    # Not `|| true`. Without the GitLab connection the instance row stays
+    # scope-NULL, every role resolves to none, and NOBODY can sign in: the
+    # install is unusable, not imperfect. It used to exit 0 under the green
+    # banner, so an operator (or a script) read it as success.
+    run_bootstrap || { BOOTSTRAP_FAILED=true; INSTALL_EXIT=1; }
     run_component_step || true
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
@@ -779,12 +794,16 @@ if prompt_confirm "Start Plumber now?"; then
     echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
     echo ""
     echo -e "  Visit: ${BOLD}${PLUMBER_URL}${NC}"
-    if [ "$PLUMBER_SCOPE" = "group" ]; then
-        echo -e "  ${DIM}Sign in with a GitLab account that is at least Maintainer of ${ROOT_GROUP}: it is a Plumber Admin${NC}"
+    if [ "$BOOTSTRAP_FAILED" = true ]; then
+        echo -e "  ${RED}You cannot sign in yet: the GitLab connection is not configured.${NC}"
     else
-        echo -e "  ${DIM}Sign in with a GitLab instance Admin account: it is a Plumber Admin${NC}"
+        if [ "$PLUMBER_SCOPE" = "group" ]; then
+            echo -e "  ${DIM}Sign in with a GitLab account that is at least Maintainer of ${ROOT_GROUP}: it is a Plumber Admin${NC}"
+        else
+            echo -e "  ${DIM}Sign in with a GitLab instance Admin account: it is a Plumber Admin${NC}"
+        fi
+        echo -e "  ${DIM}and finishes the setup in Settings (access token, SMTP, licence).${NC}"
     fi
-    echo -e "  ${DIM}and finishes the setup in Settings (access token, SMTP, licence).${NC}"
     echo ""
     echo "  Useful commands:"
     echo "    ${COMPOSE_CMD} ps       # Check service status"
@@ -795,8 +814,13 @@ if prompt_confirm "Start Plumber now?"; then
     fi
     echo "    ./scripts/backup.sh 18   # Back up the database and .env"
     echo ""
-    if [ "$INSTALL_EXIT" != 0 ]; then
+    if [ "$COMPONENT_FAILED" = true ]; then
         echo -e "${RED}The Plumber component is NOT published yet (see above). Plumber itself is running.${NC}"
+        echo ""
+    fi
+    if [ "$BOOTSTRAP_FAILED" = true ]; then
+        echo -e "${RED}The GitLab connection is NOT configured, so no one can sign in yet.${NC}"
+        echo -e "${RED}Plumber itself is running. Run the command above to finish, then sign in.${NC}"
         echo ""
     fi
 else
@@ -810,7 +834,7 @@ else
     echo -e "  Then visit: ${BOLD}${PLUMBER_URL}${NC}"
     print_bootstrap_hint
     echo ""
-    if [ "$INSTALL_EXIT" != 0 ]; then
+    if [ "$COMPONENT_FAILED" = true ]; then
         echo -e "${RED}The Plumber component is NOT published yet (see above).${NC}"
         echo ""
     fi
