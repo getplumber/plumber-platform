@@ -446,9 +446,17 @@ if [ "$SCOPE_CHOICE" = "2" ]; then
     prompt ROOT_GROUP "Root group path"
     ROOT_GROUP="${ROOT_GROUP#/}"
     ROOT_GROUP="${ROOT_GROUP%/}"
+    # A group connection cannot be set up without a token, and plumber-bootstrap
+    # refuses one: a group stored unresolved leaves nobody able to reach the
+    # Admin-gated settings that would set a token, a permanent deadlock. So it is
+    # asked for here, and becomes the access token Plumber syncs with. It is
+    # never written to .env: bootstrap seals it in the database.
+    echo -e "${DIM}A GitLab access token (scope api) whose owner is Maintainer or above on ${ROOT_GROUP}.${NC}"
+    prompt_secret GITLAB_GROUP_TOKEN "GitLab access token"
 else
     PLUMBER_SCOPE="instance"
     ROOT_GROUP=""
+    GITLAB_GROUP_TOKEN=""
 fi
 
 # GitLab OIDC
@@ -728,7 +736,12 @@ print_bootstrap_hint() {
     echo "  To configure the GitLab connection later, run from this directory:"
     echo ""
     echo "  read -rs -p \"OAuth application secret: \" PLUMBER_BOOTSTRAP_CLIENT_SECRET; echo; export PLUMBER_BOOTSTRAP_CLIENT_SECRET"
-    echo -e "    ${BOLD}${COMPOSE_CMD} exec -T -e PLUMBER_BOOTSTRAP_CLIENT_SECRET \\"
+    if [ "$PLUMBER_SCOPE" = "group" ]; then
+        echo "  read -rs -p \"GitLab access token: \" PLUMBER_BOOTSTRAP_TOKEN; echo; export PLUMBER_BOOTSTRAP_TOKEN"
+        echo -e "    ${BOLD}${COMPOSE_CMD} exec -T -e PLUMBER_BOOTSTRAP_CLIENT_SECRET -e PLUMBER_BOOTSTRAP_TOKEN \\"
+    else
+        echo -e "    ${BOLD}${COMPOSE_CMD} exec -T -e PLUMBER_BOOTSTRAP_CLIENT_SECRET \\"
+    fi
     echo -e "      backend plumber-bootstrap -base-url ${GITLAB_URL} -client-id ${GITLAB_OAUTH2_CLIENT_ID} -scope ${PLUMBER_SCOPE}${ROOT_GROUP:+ -root-group ${ROOT_GROUP}}${NC}"
 }
 
@@ -756,14 +769,18 @@ run_bootstrap() {
     local -a ARGS=(-base-url "$GITLAB_URL" -client-id "$GITLAB_OAUTH2_CLIENT_ID" -scope "$PLUMBER_SCOPE")
     if [ "$PLUMBER_SCOPE" = "group" ]; then
         ARGS+=(-root-group "$ROOT_GROUP")
+        # Name-only -e, like the secret: forwarded from the environment, never
+        # on a command line, so it stays out of history and the process list.
+        export PLUMBER_BOOTSTRAP_TOKEN="$GITLAB_GROUP_TOKEN"
+        EXEC_ENV+=(-e PLUMBER_BOOTSTRAP_TOKEN)
     fi
     # shellcheck disable=SC2086
     if $COMPOSE_CMD exec -T "${EXEC_ENV[@]}" backend plumber-bootstrap "${ARGS[@]}"; then
         echo -e "${GREEN}✓${NC} GitLab connection configured"
-        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET
+        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET PLUMBER_BOOTSTRAP_TOKEN
     else
         echo -e "${RED}!${NC} Bootstrap failed (see the message above)."
-        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET
+        unset PLUMBER_BOOTSTRAP_CLIENT_SECRET PLUMBER_BOOTSTRAP_TOKEN
         print_bootstrap_hint
         return 1
     fi
