@@ -95,6 +95,23 @@ spec:
                 secretKeyRef:
                   name: {{ $secret | quote }}
                   key: {{ $b.existingSecretClientSecretKey | quote }}
+            # A group connection MUST be given a GitLab token here, and
+            # plumber-bootstrap refuses one without it: a tokenless group is
+            # stored unresolved, and an unresolved group leaves nobody able to
+            # reach the Admin-gated settings API that would set a token, which
+            # is a permanent deadlock. Until this was injected, every
+            # bootstrap.scope=group Job rendered correctly and then failed at
+            # runtime, taking the Helm release with it (post-install hook,
+            # backoffLimit 0).
+            #
+            # An instance scope needs no token (an Admin sets one in Settings),
+            # so the key stays optional there and the env var is simply absent.
+            - name: PLUMBER_BOOTSTRAP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secret | quote }}
+                  key: {{ $b.existingSecretTokenKey | quote }}
+                  optional: {{ ne $b.scope "group" }}
           {{- with .Values.backend.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}

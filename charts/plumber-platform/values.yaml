@@ -132,10 +132,14 @@ bootstrap:
   scope: "instance"
   # -- Root group path, required with scope: group.
   rootGroup: ""
-  # -- Existing Secret with the OAuth application secret (key clientSecret). The GitLab access
-  # token is not part of the bootstrap: an Admin sets it in Settings.
+  # -- Existing Secret with the OAuth application secret (key clientSecret), and, for
+  # scope: group, a GitLab access token (key token) that is Maintainer or above on
+  # rootGroup. An instance scope needs no token here, an Admin sets one in Settings;
+  # a group scope REQUIRES one, because a group stored unresolved cannot be fixed
+  # afterwards and plumber-bootstrap refuses to create that state.
   existingSecret: ""
   existingSecretClientSecretKey: "clientSecret"
+  existingSecretTokenKey: "token"
   # -- Image used to wait for the backend's /readyz before bootstrapping.
   waitImage: curlimages/curl:8.11.1
 
