@@ -52,12 +52,11 @@ tests:
               secretKeyRef:
                 name: bootstrap-secret
                 key: clientSecret
-      # The access token is set in Settings by an Admin, never by the bootstrap.
-      - notContains:
-          path: spec.template.spec.containers[0].env
-          content:
-            name: PLUMBER_BOOTSTRAP_TOKEN
-          any: true
+      # An instance scope still needs no access token from the bootstrap: the
+      # key is declared optional, so a Secret without it leaves the variable
+      # unset and an Admin sets the token in Settings, exactly as before. This
+      # assertion used to be a blanket notContains, which also locked out the
+      # group scope, where a token is MANDATORY (see the two tests below).
       - contains:
           path: spec.template.spec.containers[0].env
           content:
@@ -74,6 +73,36 @@ tests:
       - equal:
           path: spec.template.spec.containers[0].command
           value: ["/usr/local/bin/plumber-bootstrap", "-base-url", "https://gitlab.example.com", "-client-id", "app-id", "-scope", "group", "-root-group", "my-company"]
+  # plumber-bootstrap REFUSES a group scope with no token (it would store the
+  # group unresolved, with nobody able to reach the settings API that would fix
+  # it). The Job used to pass none, so every group-scope install rendered fine
+  # and then failed at runtime, failing the release with it. Asserting the
+  # rendered command alone is what let that through, so assert the env too.
+  - it: requires the token from the secret for a group scope
+    set:
+      bootstrap.scope: group
+      bootstrap.rootGroup: my-company
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_BOOTSTRAP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: bootstrap-secret
+                key: token
+                optional: false
+  - it: leaves the token optional for an instance scope
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: PLUMBER_BOOTSTRAP_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: bootstrap-secret
+                key: token
+                optional: true
   - it: fails on a group scope without a root group
     set:
       bootstrap.scope: group

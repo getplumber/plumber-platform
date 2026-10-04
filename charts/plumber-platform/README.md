@@ -55,6 +55,11 @@ bootstrap:
   existingSecret: plumber-bootstrap        # key clientSecret
 ```
 
+With `scope: group` the same Secret must also carry a `token` key, a GitLab access token that is
+Maintainer or above on `rootGroup`. An instance scope needs no token here (an Admin sets one in
+Settings); a group scope requires one, because a group stored unresolved cannot be repaired
+afterwards and `plumber-bootstrap` refuses to create that state.
+
 The Job waits for the backend, whose first boot can take a few minutes (image pull, migrations). Pass
 `--timeout 15m` to `helm install` when `bootstrap.enabled` is true so Helm does not mark the release
 failed while the Job is still waiting.
