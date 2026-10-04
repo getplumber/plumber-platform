@@ -255,6 +255,31 @@ if [ -f .env ]; then
 fi
 
 # =============================================================================
+# Step 1a: Choose deployment type
+# =============================================================================
+#
+# Asked here, before the guards below, because it decides WHICH compose file
+# this run will use and therefore which Compose project and which volumes it
+# would touch: compose.yml is project "plumber", compose.local.yml is
+# "plumber-local". The guards used to run first and always test "plumber", so a
+# local install on a host with a production Plumber was refused over a project
+# and a volume it was never going to touch, and the volume guard told the
+# operator to delete the production database to get past it.
+
+prompt_choice DEPLOY_TYPE "Deployment type:" \
+    "Production (domain, TLS, reverse proxy)" \
+    "Local (localhost, no TLS)"
+echo ""
+
+if [ "$DEPLOY_TYPE" = "2" ]; then
+    COMPOSE_CMD="docker compose -f compose.local.yml"
+    COMPOSE_FILE="compose.local.yml"
+else
+    COMPOSE_CMD="docker compose"
+    COMPOSE_FILE="compose.yml"
+fi
+
+# =============================================================================
 # Step 1b: Refuse to adopt another Plumber's Compose project
 # =============================================================================
 #
@@ -277,7 +302,7 @@ fi
 # the live v1 database.
 #
 # So: if this project name already has containers from another directory, stop.
-PROJECT_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' compose.yml | head -n 1)"
+PROJECT_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$COMPOSE_FILE" | head -n 1)"
 if [ -n "$PROJECT_NAME" ]; then
     # The working directory recorded on each container of that project. Exact,
     # and needs nothing but docker.
@@ -351,15 +376,6 @@ if [ -n "$PROJECT_NAME" ]; then
         exit 1
     fi
 fi
-
-# =============================================================================
-# Step 2: Choose deployment type
-# =============================================================================
-
-prompt_choice DEPLOY_TYPE "Deployment type:" \
-    "Production (domain, TLS, reverse proxy)" \
-    "Local (localhost, no TLS)"
-echo ""
 
 # =============================================================================
 # Step 3: Run pre-config checks
@@ -696,21 +712,16 @@ echo ""
 echo "───────────────────────────────────────"
 echo ""
 
-if [ "$DEPLOY_TYPE" = "2" ]; then
-    COMPOSE_CMD="docker compose -f compose.local.yml"
-    COMPOSE_FILE="compose.local.yml"
-else
-    COMPOSE_CMD="docker compose"
-    COMPOSE_FILE="compose.yml"
-fi
-
+# COMPOSE_CMD, COMPOSE_FILE and PROJECT_NAME were fixed at step 1a, before the
+# guards that depend on them.
+#
 # Read the network off the Compose project name in the file actually in use,
 # instead of repeating the literal here. The readiness probe below joins this
 # network to reach the backend, and a probe pointed at a network that does not
 # exist cannot succeed: every attempt fails, the backend is declared not ready
 # whatever it is doing, and bootstrap is skipped. Deriving it keeps the two
 # from drifting apart silently.
-NETWORK_NAME="$(sed -n 's/^name:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}[[:space:]]*$/\1/p' "$COMPOSE_FILE" | head -n 1)_intranet"
+NETWORK_NAME="${PROJECT_NAME}_intranet"
 
 print_bootstrap_hint() {
     echo ""
