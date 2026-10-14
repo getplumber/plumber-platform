@@ -12,10 +12,12 @@
 #      compose.yml and compose.local.yml, so the pull is the version bump)
 #   3. Rebuilds the custom CA bundle if you use one
 #   4. Starts containers with the new images (the backend migrates the database on boot)
-#   5. With --component: refreshes the local copy of the Plumber CI/CD component
+#   5. With --component: refreshes your GitLab's copy of the Plumber CI/CD component
 #      (PLUMBER_COMPONENT_PROJECT in .env) and publishes its latest version to your
-#      CI/CD catalog. Asks for a GitLab token (Owner of the group, api scope), used
-#      for this run only.
+#      CI/CD catalog, through scripts/component-update.sh. Asks for a GitLab token
+#      (Owner of the group, api scope) unless PLUMBER_COMPONENT_TOKEN is exported; the
+#      token is used for this run only. Installs that include the component from
+#      gitlab.com have no copy and do not need this.
 #
 # Upgrades are sequential and additive: rolling back is checking out the previous
 # release tag (git checkout vX.Y.Z) and starting again. Never downgrade the database by hand.
@@ -93,22 +95,26 @@ echo ""
 echo -e "${GREEN}✓ Plumber has been updated to ${PINNED_VERSION}!${NC}"
 echo ""
 
-if [ "$UPDATE_COMPONENT" = true ]; then
-    COMPONENT_PROJECT=$(sed -n "s/^PLUMBER_COMPONENT_PROJECT=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" .env | head -n 1)
-    GITLAB_URL_ENV=$(sed -n "s/^GITLAB_URL=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" .env | head -n 1)
-    if [ -z "$COMPONENT_PROJECT" ] || [ -z "$GITLAB_URL_ENV" ]; then
-        echo -e "${RED}Error:${NC} .env has no PLUMBER_COMPONENT_PROJECT (or GITLAB_URL). Run the copy once by hand:"
-        echo "  PLUMBER_COMPONENT_TOKEN=... ./scripts/component-mirror.sh --gitlab-url <gitlab url> --group <group>"
-        exit 1
-    fi
-    COMPONENT_GROUP="${COMPONENT_PROJECT%/*}"
-    COMPONENT_NAME="${COMPONENT_PROJECT##*/}"
-    echo -e "${BOLD}Refreshing the CI/CD component copy ${COMPONENT_PROJECT}...${NC}"
-    if [ -z "${PLUMBER_COMPONENT_TOKEN:-}" ]; then
-        read -rs -p "GitLab token (Owner of ${COMPONENT_GROUP}, api scope, used for this run only): " PLUMBER_COMPONENT_TOKEN < /dev/tty
-        echo ""
-        export PLUMBER_COMPONENT_TOKEN
-    fi
-    bash scripts/component-mirror.sh --gitlab-url "$GITLAB_URL_ENV" --group "$COMPONENT_GROUP" --project "$COMPONENT_NAME"
-    unset PLUMBER_COMPONENT_TOKEN
+if [ "$UPDATE_COMPONENT" = false ]; then
+    exit 0
 fi
+
+# --component: the copy of the CI/CD component moves with the platform. scripts/component-update.sh
+# resolves its inputs from the environment first, so the .env values are exported for it; it asks
+# for the token itself.
+COMPONENT_PROJECT=$(sed -n "s/^PLUMBER_COMPONENT_PROJECT=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" .env | head -n 1)
+GITLAB_URL_ENV=$(sed -n "s/^GITLAB_URL=['\"]\{0,1\}\([^'\"]*\)['\"]\{0,1\}$/\1/p" .env | head -n 1)
+if [ -z "$COMPONENT_PROJECT" ] || [ -z "$GITLAB_URL_ENV" ]; then
+    echo -e "${RED}Error:${NC} .env has no PLUMBER_COMPONENT_PROJECT (or GITLAB_URL), so there is no component copy to refresh."
+    echo "  To create one: ./scripts/component-update.sh --project <group>/plumber, then add"
+    echo "  PLUMBER_COMPONENT_PROJECT='<group>/plumber' to .env so ./scripts/update.sh --component refreshes it."
+    exit 1
+fi
+echo -e "${BOLD}Refreshing the CI/CD component copy ${COMPONENT_PROJECT}...${NC}"
+if GITLAB_URL="$GITLAB_URL_ENV" PLUMBER_COMPONENT_PROJECT="$COMPONENT_PROJECT" bash scripts/component-update.sh; then
+    exit 0
+fi
+echo ""
+echo -e "${RED}The component copy was NOT refreshed (see above). Plumber itself is updated to ${PINNED_VERSION}.${NC}"
+echo "  To retry: ./scripts/component-update.sh"
+exit 1
