@@ -77,20 +77,26 @@ The command refuses an already-configured instance, so it is safe to retry on a 
 ### Plumber component in your GitLab
 
 Pipelines include the Plumber CI/CD component from `gitlab.com/getplumber/plumber`. When your
-GitLab cannot reach gitlab.com (or you want a copy you control), the installer offers to copy it;
-the same step runs on its own:
+GitLab cannot reach gitlab.com (or you want a copy you control), the installer offers to copy it.
+The same step runs on its own, on any Plumber install (Compose, Helm or other), from a clone of
+this repository:
 
 ```bash
-read -rs -p "GitLab token: " PLUMBER_COMPONENT_TOKEN; echo; export PLUMBER_COMPONENT_TOKEN
-./scripts/component-mirror.sh --gitlab-url https://gitlab.example.com --group my-group
+./scripts/component-update.sh --gitlab-url https://gitlab.example.com --project my-group/plumber
 ```
+
+Each value comes from the environment when set (`GITLAB_URL`, `PLUMBER_COMPONENT_PROJECT`,
+`PLUMBER_COMPONENT_TOKEN`), else from the option, else the script asks for it. The token (`api`
+scope, Owner of the group or instance Admin) is never an option: export it or type it at the
+prompt; it is used for this run only.
 
 It creates or reuses `my-group/plumber` (with the description the catalog requires), copies every
 branch and tag, flags the project as a CI/CD catalog project, runs the release pipeline on the
-latest tag and verifies the version is in the catalog before reporting `Component published`. The
-token (`api` scope, Owner of the group or instance Admin) is read from the environment for this
-run only. A runner able to pull `registry.gitlab.com/gitlab-org/release-cli` must be available to
-the project. Then, in Plumber, an Admin sets `Settings > Component` to `my-group/plumber`.
+latest tag and verifies the version is in the catalog before reporting `Component published`
+(`scripts/component-mirror.sh` does that work; `--publish-only`, `--timeout` and `--dry-run` pass
+through to it). A runner able to pull `registry.gitlab.com/gitlab-org/release-cli` must be
+available to the project. Then, in Plumber, an Admin sets `Settings > Component` to
+`my-group/plumber`.
 
 ### Update, backup, restore
 
@@ -116,6 +122,8 @@ helm upgrade --install plumber plumber-platform/plumber-platform -n plumber --cr
 See [`charts/plumber-platform/README.md`](charts/plumber-platform/README.md) for the minimal
 values (one ingress host serves both apps), the secrets, the bundled or external Postgres and
 Redis, the private CA options and the first-run bootstrap (manual command or the post-install Job).
+A copy of the Plumber CI/CD component on your GitLab is refreshed the same way as on Compose:
+`./scripts/component-update.sh` from a clone of this repository (see above).
 
 ## Releases
 

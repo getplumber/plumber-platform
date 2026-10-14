@@ -76,6 +76,9 @@ already-configured instance, so it is safe to leave enabled.
 - Private CA for GitLab: `customCertificateAuthority.{existingSecret|configMapName|certificates}`;
   the chart mounts it in both apps and builds the single PEM bundle the backend reads.
 - Air-gapped: `platform.updateCheckUrl: "off"`.
+- Component copy on your GitLab: after each upgrade, refresh it from a clone of this repository
+  with `./scripts/component-update.sh` (it asks for the GitLab URL, the project path and an Owner
+  token unless `GITLAB_URL`, `PLUMBER_COMPONENT_PROJECT` and `PLUMBER_COMPONENT_TOKEN` are set).
 - Probes: liveness `/healthz`, readiness `/readyz` (database-backed). Metrics: `/metrics` on the
   backend Service (not exposed by the ingress).
 

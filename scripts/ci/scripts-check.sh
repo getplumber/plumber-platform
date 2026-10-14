@@ -61,4 +61,23 @@ if bash scripts/component-mirror.sh --dry-run --gitlab-url https://gitlab.exampl
 if env -u PLUMBER_COMPONENT_TOKEN bash scripts/component-mirror.sh --gitlab-url https://gitlab.example.com --group acme >/dev/null 2>&1; then echo "FAIL: a missing token must fail before any network call"; exit 1; fi
 if bash scripts/component-mirror.sh --dry-run --gitlab-url https://gitlab.example.com --group acme --bogus >/dev/null 2>&1; then echo "FAIL: unknown options must be rejected"; exit 1; fi
 echo "  ok   component-mirror.sh"
+
+# component-update.sh: resolves its inputs (environment, then option, then prompt) and hands
+# them to component-mirror.sh. The dry run needs no token and no network.
+OUT=$(env -u GITLAB_URL -u PLUMBER_COMPONENT_PROJECT bash scripts/component-update.sh --dry-run --gitlab-url gitlab.example.com --project /acme/plumber-copy/) || { echo "FAIL: dry run from options should exit 0"; exit 1; }
+grep -q "Project:       acme/plumber-copy" <<<"$OUT" || { echo "FAIL: options should resolve acme/plumber-copy"; echo "$OUT"; exit 1; }
+grep -q "GitLab:        https://gitlab.example.com$" <<<"$OUT" || { echo "FAIL: the GitLab URL should be normalised"; echo "$OUT"; exit 1; }
+# the environment wins over the options (update.sh exports the .env values and calls this script)
+OUT=$(GITLAB_URL=https://env.example.com PLUMBER_COMPONENT_PROJECT=envgroup/plumber bash scripts/component-update.sh --dry-run --gitlab-url https://opt.example.com --project opt/plumber) || { echo "FAIL: dry run from the environment should exit 0"; exit 1; }
+grep -q "Project:       envgroup/plumber" <<<"$OUT" || { echo "FAIL: PLUMBER_COMPONENT_PROJECT should win over --project"; echo "$OUT"; exit 1; }
+grep -q "GitLab:        https://env.example.com$" <<<"$OUT" || { echo "FAIL: GITLAB_URL should win over --gitlab-url"; echo "$OUT"; exit 1; }
+grep -q "from the environment" <<<"$OUT" || { echo "FAIL: the source of each value should be printed"; echo "$OUT"; exit 1; }
+# a project path without its group is refused before anything runs
+if env -u GITLAB_URL -u PLUMBER_COMPONENT_PROJECT bash scripts/component-update.sh --dry-run --gitlab-url https://gitlab.example.com --project plumber >/dev/null 2>&1; then echo "FAIL: --project needs a group/name path"; exit 1; fi
+if bash scripts/component-update.sh --dry-run --gitlab-url https://gitlab.example.com --project acme/plumber --bogus >/dev/null 2>&1; then echo "FAIL: unknown options must be rejected"; exit 1; fi
+# with no terminal to ask on, a missing value is an error, not a hang (setsid drops the controlling tty)
+if command -v setsid >/dev/null 2>&1; then
+  if env -u GITLAB_URL -u PLUMBER_COMPONENT_PROJECT setsid -w bash scripts/component-update.sh --dry-run --gitlab-url https://gitlab.example.com </dev/null >/dev/null 2>&1; then echo "FAIL: a missing value without a terminal must fail"; exit 1; fi
+fi
+echo "  ok   component-update.sh"
 echo "scripts-check: all good"

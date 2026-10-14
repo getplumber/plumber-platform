@@ -498,7 +498,7 @@ prompt_secret GITLAB_OAUTH2_CLIENT_SECRET "Secret"
 
 # CI/CD component copy (optional): a project in the customer's GitLab that mirrors
 # gitlab.com/getplumber/plumber and publishes its latest version to the CI/CD catalog.
-# The token is used by scripts/component-mirror.sh for this run only, never stored.
+# The token is used by scripts/component-update.sh for this run only, never stored.
 COMPONENT_REQUESTED=false
 COMPONENT_GROUP=""
 echo ""
@@ -794,15 +794,15 @@ COMPONENT_FAILED=false
 run_component_step() {
     [ "$COMPONENT_REQUESTED" = true ] || return 0
     echo ""
-    if bash scripts/component-mirror.sh --gitlab-url "$GITLAB_URL" --group "$COMPONENT_GROUP"; then
+    if GITLAB_URL="$GITLAB_URL" PLUMBER_COMPONENT_PROJECT="${COMPONENT_GROUP}/plumber" bash scripts/component-update.sh; then
         return 0
     fi
     INSTALL_EXIT=1
     COMPONENT_FAILED=true
     echo ""
     echo "  To publish it later, run from this directory:"
-    echo "  read -rs -p \"GitLab token: \" PLUMBER_COMPONENT_TOKEN; echo; export PLUMBER_COMPONENT_TOKEN"
-    echo -e "    ${BOLD}./scripts/component-mirror.sh --gitlab-url ${GITLAB_URL} --group ${COMPONENT_GROUP}${NC}"
+    echo -e "    ${BOLD}./scripts/component-update.sh --gitlab-url ${GITLAB_URL} --project ${COMPONENT_GROUP}/plumber${NC}"
+    echo "  (it asks for the GitLab token)"
     return 1
 }
 
