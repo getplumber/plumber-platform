@@ -1,0 +1,23 @@
+name: Plumber PR gate
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: plumber-pr-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  plumber:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # SARIF upload to Code Scanning
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: getplumber/plumber@ebc213aa45dccd233ce5c2630f0aafa8e8d650c5 # v0.7.18
+        with:
+          version: v0.7.18
+          min-points: 90
