@@ -24,13 +24,14 @@ tests:
       - equal:
           path: spec.template.spec.terminationGracePeriodSeconds
           value: 1200
-  - it: pins the image from tag and wires liveness to /healthz and readiness to /readyz
+  - it: derives the image tag from the chart appVersion and wires liveness to /healthz and readiness to /readyz
+    chart:
+      appVersion: 9.9.9
     asserts:
-      # The tag is the release pin, bumped by every release PR: assert the shape, not the value
-      # (publish-release.yml cross-checks the exact tag against latest.json).
-      - matchRegex:
+      # The tag is not a value: the chart installs the release it is (values tags stay empty).
+      - equal:
           path: spec.template.spec.containers[0].image
-          pattern: ^docker\.io/getplumber/platform-backend:v[0-9]+\.[0-9]+\.[0-9]+$
+          value: docker.io/getplumber/platform-backend:v9.9.9
       - equal:
           path: spec.template.spec.containers[0].livenessProbe.httpGet.path
           value: /healthz
@@ -44,12 +45,23 @@ tests:
           path: spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem
           value: true
   - it: honours imageRegistry
+    chart:
+      appVersion: 9.9.9
     set:
       imageRegistry: registry.example.com
     asserts:
-      - matchRegex:
+      - equal:
           path: spec.template.spec.containers[0].image
-          pattern: ^registry\.example\.com/getplumber/platform-backend:v[0-9]+\.[0-9]+\.[0-9]+$
+          value: registry.example.com/getplumber/platform-backend:v9.9.9
+  - it: lets an explicit backend.tag pin another version on purpose
+    chart:
+      appVersion: 9.9.9
+    set:
+      backend.tag: v1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/getplumber/platform-backend:v1.2.3
   - it: sets the public origin, audience and issuers from platform values
     asserts:
       - contains:

@@ -1,7 +1,7 @@
 # The platform-repo half of a release. The monorepo's release workflow opens a PR
 # here (branch release-vX.Y.Z) that bumps, in ONE commit: the two app image tags
-# in compose.yml and compose.local.yml, charts/plumber-platform/Chart.yaml (version + appVersion),
-# charts/plumber-platform/values.yaml (both image tags), latest.json and
+# in compose.yml and compose.local.yml, charts/plumber-platform/Chart.yaml (version + appVersion,
+# the chart derives both image tags from it), latest.json and
 # releases/vX.Y.Z.md. Thomas merges it: that merge is the release approval.
 # This workflow reacts to that merge and publishes what customers consume:
 # the git tag, the GitHub Release (notes + packaged chart + the v1migrate
@@ -58,11 +58,14 @@ jobs:
           if [ "$CV" != "$X" ] || [ "$CA" != "$X" ]; then
             echo "::error::Chart.yaml is version '$CV' / appVersion '$CA', want '$X'"; exit 1
           fi
-          FT=$(yq -r '.front.tag' charts/plumber-platform/values.yaml)
-          BT=$(yq -r '.backend.tag' charts/plumber-platform/values.yaml)
-          if [ "$FT" != "$V" ] || [ "$BT" != "$V" ]; then
-            echo "::error::values.yaml tags are front '$FT' / backend '$BT', want '$V'"; exit 1
-          fi
+          # The app tags default to empty (the chart derives v<appVersion>); a release
+          # pinned in values must still be exactly this one.
+          for app in front backend; do
+            T=$(yq -r ".$app.tag // \"\"" charts/plumber-platform/values.yaml)
+            if [ -n "$T" ] && [ "$T" != "$V" ]; then
+              echo "::error::values.yaml $app.tag is '$T', want empty or '$V'"; exit 1
+            fi
+          done
           {
             echo "version=$V"
             echo "chart_version=$X"

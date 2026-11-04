@@ -1,0 +1,31 @@
+suite: NOTES (install summary and the pinned-tag warning)
+templates:
+  - NOTES.txt
+values:
+  - ./values/base.yaml
+release:
+  name: plumber
+chart:
+  appVersion: 9.9.9
+tests:
+  - it: names the installed release and stays silent when the tags follow the chart
+    asserts:
+      - matchRegexRaw:
+          pattern: "Plumber Platform 9\.9\.9 deployed"
+      - notMatchRegexRaw:
+          pattern: "WARNING: your values pin the images"
+  - it: warns when a values tag diverges from the chart release
+    set:
+      front.tag: v2.0.0
+      backend.tag: v2.0.0
+    asserts:
+      - matchRegexRaw:
+          pattern: "WARNING: your values pin the images to front\.tag=v2\.0\.0 backend\.tag=v2\.0\.0, but this chart"
+      - matchRegexRaw:
+          pattern: "release installs v9\.9\.9"
+  - it: warns when only one tag is pinned
+    set:
+      backend.tag: v9.9.8
+    asserts:
+      - matchRegexRaw:
+          pattern: "front\.tag=v9\.9\.9 backend\.tag=v9\.9\.8"
