@@ -69,10 +69,12 @@ already-configured instance, so it is safe to leave enabled.
 
 ## Operations
 
-- Upgrade: bump `front.tag` and `backend.tag` together (every release pins both to one version),
-  `helm upgrade`. The backend Deployment uses `Recreate` and one replica by design: the process owns
-  the job queues, and two versions must never run at once. Rollback = roll the image back; never run
-  a database downgrade.
+- Upgrade: `helm repo update`, then `helm upgrade`. The chart pins both images to its own
+  version (`front.tag` and `backend.tag` default to `v<appVersion>`): leave them unset in your
+  values, a pinned tag freezes the install on that version through every upgrade (NOTES warns).
+  The backend Deployment uses `Recreate` and one replica by design: the process owns the job
+  queues, and two versions must never run at once. Rollback = roll the image back; never run a
+  database downgrade.
 - Private CA for GitLab: `customCertificateAuthority.{existingSecret|configMapName|certificates}`;
   the chart mounts it in both apps and builds the single PEM bundle the backend reads.
 - Air-gapped: `platform.updateCheckUrl: "off"`.

@@ -6,18 +6,27 @@ values:
 release:
   name: plumber
 tests:
-  - it: renders plumber-front with the pinned image and a writable /tmp
+  - it: renders plumber-front with the image tag derived from the chart appVersion and a writable /tmp
+    chart:
+      appVersion: 9.9.9
     asserts:
       - hasDocuments:
           count: 1
       - equal:
           path: metadata.name
           value: plumber-front
-      # The tag is the release pin, bumped by every release PR: assert the shape, not the value
-      # (publish-release.yml cross-checks the exact tag against latest.json).
-      - matchRegex:
+      - equal:
           path: spec.template.spec.containers[0].image
-          pattern: ^docker\.io/getplumber/platform-frontend:v[0-9]+\.[0-9]+\.[0-9]+$
+          value: docker.io/getplumber/platform-frontend:v9.9.9
+  - it: lets an explicit front.tag pin another version on purpose
+    chart:
+      appVersion: 9.9.9
+    set:
+      front.tag: v1.2.3
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: docker.io/getplumber/platform-frontend:v1.2.3
       - contains:
           path: spec.template.spec.volumes
           content:

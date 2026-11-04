@@ -9,6 +9,16 @@ Access: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .V
 No ingress enabled. Set ingress.enabled=true and ingress.host: the browser calls the API
 same-origin under /api, so ONE host must serve both apps (this chart's ingress does that).
 {{- end }}
+{{- $want := printf "v%s" .Chart.AppVersion }}
+{{- $ft := include "plumber-platform.appTag" (dict "root" $ "app" .Values.front) }}
+{{- $bt := include "plumber-platform.appTag" (dict "root" $ "app" .Values.backend) }}
+{{- if or (ne $ft $want) (ne $bt $want) }}
+
+WARNING: your values pin the images to front.tag={{ $ft }} backend.tag={{ $bt }}, but this chart
+release installs {{ $want }}. A pinned tag overrides the chart and freezes the install on that
+version through every upgrade. Remove front.tag and backend.tag from your values to follow the
+chart (both images always move together with it).
+{{- end }}
 {{- if gt (int .Values.backend.replicaCount) 1 }}
 
 WARNING: backend.replicaCount is {{ .Values.backend.replicaCount }}. The backend runs its job

@@ -21,12 +21,18 @@ annotations:
 {{- end }}
 {{- end }}
 
+{{/* App image tag: dict "root" $ "app" .Values.backend. Empty = v<appVersion>, the release this chart installs. */}}
+{{- define "plumber-platform.appTag" -}}
+{{- .app.tag | default (printf "v%s" .root.Chart.AppVersion) -}}
+{{- end }}
+
 {{/* App image ref: dict "root" $ "app" .Values.backend */}}
 {{- define "plumber-platform.appImage" -}}
+{{- $tag := include "plumber-platform.appTag" . -}}
 {{- if .root.Values.imageRegistry -}}
-{{ .root.Values.imageRegistry }}/{{ .app.imageName }}:{{ .app.tag }}
+{{ .root.Values.imageRegistry }}/{{ .app.imageName }}:{{ $tag }}
 {{- else -}}
-{{ .app.image }}:{{ .app.tag }}
+{{ .app.image }}:{{ $tag }}
 {{- end -}}
 {{- end }}
 
