@@ -2,6 +2,35 @@ apiVersion: v1
 entries:
   plumber-platform:
   - apiVersion: v2
+    appVersion: 2.12.0
+    created: "2026-11-05T07:52:57.052349544Z"
+    description: Helm chart for the Plumber Platform (v2 line). The v1 chart is `plumber`.
+    digest: f7db6031ef3e083942ff61eb5718f3a30044a88f19f5cc26685fc2646e7ad575
+    home: https://github.com/getplumber/plumber-platform/
+    keywords:
+    - plumber
+    - ci-cd
+    - security
+    - compliance
+    maintainers:
+    - email: bertrand@devpro.fr
+      name: devpro
+    - email: slongo@klanik.com
+      name: gemini-jtff
+    - email: thomas@getplumber.io
+      name: thomasboni
+    - email: thibaud@getplumber.io
+      name: Totara-thib
+    - email: joseph.moukarzel@jmclarity.com
+      name: Joseph94m
+    name: plumber-platform
+    sources:
+    - https://github.com/getplumber/plumber-platform
+    type: application
+    urls:
+    - https://github.com/getplumber/plumber-platform/releases/download/v2.12.0/plumber-platform-2.12.0.tgz
+    version: 2.12.0
+  - apiVersion: v2
     appVersion: 2.11.0
     created: "2026-10-20T17:52:10.353976932Z"
     description: Helm chart for the Plumber Platform (v2 line). The v1 chart is `plumber`.
@@ -407,4 +436,4 @@ entries:
     urls:
     - https://github.com/getplumber/plumber-platform/releases/download/v2.0.0/plumber-platform-2.0.0.tgz
     version: 2.0.0
-generated: "2026-10-20T17:52:10.3526996Z"
+generated: "2026-11-05T07:52:57.051137388Z"
