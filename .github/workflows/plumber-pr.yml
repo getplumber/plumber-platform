@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v5.0.0
         with:
           persist-credentials: false
-      - uses: getplumber/plumber@v0.7.18
+      - uses: getplumber/plumber@v0.7.23
         with:
-          version: v0.7.18
+          version: v0.7.23
           min-points: 90
