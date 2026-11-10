@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4.4.0
-        with: {fetch-depth: 0}
+        with: {fetch-depth: 0, persist-credentials: false}
 
       - uses: azure/setup-helm@v4.3.0
         with: {version: v3.21.4}
@@ -94,6 +94,9 @@ jobs:
             echo "tag $V already exists - keeping it"
           else
             git tag "$V"
+            # The checkout persists no credential (ISSUE-307): gh wires git's
+            # credential helper to GH_TOKEN for this push.
+            gh auth setup-git
             git push origin "$V"
           fi
           if ! gh release view "$V" >/dev/null 2>&1; then
@@ -133,9 +136,12 @@ jobs:
 
       - name: update the helm repo index on gh-pages
         env:
+          GH_TOKEN: ${{ github.token }}
           V: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
+          # Same as the tag push above: the checkout persists no credential.
+          gh auth setup-git
           git worktree add /tmp/gh-pages origin/gh-pages
           # helm repo index merges the new package entry (download URL = the release asset)
           # into the existing index.
