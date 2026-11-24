@@ -161,6 +161,21 @@ ingress:
     # -- Defaults to <release>-plumber-platform-tls.
     secretName: ""
 
+# -- Gateway API: an HTTPRoute attached to a Gateway you own (the Gateway, its listener and its TLS
+# certificate stay yours). May be enabled together with the ingress during a migration.
+httpRoute:
+  enabled: false
+  # -- The Gateway(s) this route attaches to (name, namespace, sectionName, port as Gateway API
+  # defines them). Required when enabled. A Gateway in another namespace must allow routes from
+  # this release's namespace on its listener (allowedRoutes).
+  parentRefs: []
+    # - name: forge-gateway
+    #   namespace: gateway-system
+    #   sectionName: https
+  # -- ONE host for both apps (the browser calls /api same-origin). Required when enabled.
+  host: ""
+  annotations: {}
+
 # -- Private CA trust for GitLab (and SMTP). Same three modes as the v1 chart.
 customCertificateAuthority:
   existingSecret: ""

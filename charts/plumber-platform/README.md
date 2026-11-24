@@ -40,6 +40,26 @@ Inline `platform.tokenEncryptionKey`, `postgresql.global.postgresql.auth.passwor
 `redis.auth.password` are accepted for evaluation setups; the chart then writes them into the
 Secret `<release>-plumber-platform`.
 
+## Gateway API
+
+On a cluster that routes through the Gateway API, the chart renders an HTTPRoute that attaches to
+a Gateway you own:
+
+```yaml
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: forge-gateway
+      namespace: gateway-system
+      sectionName: https
+  host: plumber.example.com                # one host: /api -> backend, / -> frontend
+```
+
+The chart creates no Gateway and handles no certificate: the listener for the hostname and its
+TLS termination live on your Gateway. When the Gateway sits in another namespace, its listener
+must allow routes from the release namespace (`allowedRoutes`). `ingress` and `httpRoute` can be
+enabled together while you migrate from one to the other.
+
 ## First run
 
 Create a GitLab OAuth application (redirect URI `<platform.baseUrl>/api/v1/auth/callback`,
