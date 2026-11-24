@@ -6,6 +6,8 @@ cd "$(dirname "$0")/../.."
 CHART=charts/plumber-platform
 KUBECONFORM="${KUBECONFORM:-kubeconform}"
 BASE="$CHART/tests/values/base.yaml"
+# Kinds outside core Kubernetes (the Gateway API HTTPRoute) validate against the CRDs catalog.
+CRD_SCHEMAS='https://raw.githubusercontent.com/datreeio/CRDs-catalog/04af58d740718c4dc719441bf39fb284c784f4a8/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'
 
 helm lint "$CHART" -f "$BASE" --strict
 helm unittest "$CHART"
@@ -13,7 +15,8 @@ helm unittest "$CHART"
 validate() { # validate <label> [extra helm args...]
   local label="$1"; shift
   helm template plumber "$CHART" -f "$BASE" "$@" \
-    | "$KUBECONFORM" -strict -summary -kubernetes-version 1.30.0 -schema-location default
+    | "$KUBECONFORM" -strict -summary -kubernetes-version 1.30.0 -schema-location default \
+      -schema-location "$CRD_SCHEMAS"
   echo "  ok   kubeconform: $label"
 }
 validate "defaults"
@@ -26,4 +29,6 @@ validate "custom ca + bootstrap job" --set customCertificateAuthority.certificat
   --set customCertificateAuthority.certificates[0].value=dummy \
   --set bootstrap.enabled=true --set bootstrap.gitlabUrl=https://gitlab.example.com \
   --set bootstrap.clientId=abc --set bootstrap.existingSecret=bootstrap-secret
+validate "gateway api httproute" --set httpRoute.enabled=true --set httpRoute.host=plumber.example.com \
+  --set 'httpRoute.parentRefs[0].name=forge-gateway' --set 'httpRoute.parentRefs[0].namespace=gateway-system'
 echo "chart-check: all good"

@@ -4,10 +4,15 @@ Plumber Platform {{ .Chart.AppVersion }} deployed (release {{ .Release.Name }}, 
 {{- if .Values.ingress.enabled }}
 
 Access: {{ if .Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}
+{{- else if .Values.httpRoute.enabled }}
+
+Access: https://{{ .Values.httpRoute.host }} through the Gateway named by httpRoute.parentRefs (TLS
+terminates on its listener; the scheme above assumes an https listener).
 {{- else }}
 
-No ingress enabled. Set ingress.enabled=true and ingress.host: the browser calls the API
-same-origin under /api, so ONE host must serve both apps (this chart's ingress does that).
+No ingress or HTTPRoute enabled. Set ingress.enabled=true and ingress.host, or httpRoute.enabled=true
+with httpRoute.host and httpRoute.parentRefs: the browser calls the API same-origin under /api, so
+ONE host must serve both apps (this chart's ingress and HTTPRoute both do that).
 {{- end }}
 {{- $want := printf "v%s" .Chart.AppVersion }}
 {{- $ft := include "plumber-platform.appTag" (dict "root" $ "app" .Values.front) }}

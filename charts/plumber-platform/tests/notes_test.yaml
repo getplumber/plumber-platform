@@ -29,3 +29,18 @@ tests:
     asserts:
       - matchRegexRaw:
           pattern: "front\.tag=v9\.9\.9 backend\.tag=v9\.9\.8"
+  - it: names the Gateway API access when the HTTPRoute is enabled
+    set:
+      httpRoute.enabled: true
+      httpRoute.host: plumber.example.com
+      httpRoute.parentRefs:
+        - name: forge-gateway
+    asserts:
+      - matchRegexRaw:
+          pattern: "Access: https://plumber\.example\.com through the Gateway named by httpRoute\.parentRefs"
+      - notMatchRegexRaw:
+          pattern: "No ingress or HTTPRoute enabled"
+  - it: names both ways to expose the apps when neither is enabled
+    asserts:
+      - matchRegexRaw:
+          pattern: "No ingress or HTTPRoute enabled\. Set ingress\.enabled=true and ingress\.host, or httpRoute\.enabled=true"
